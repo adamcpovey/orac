@@ -8,10 +8,10 @@ F77 = ifort
 F90 = ifort
 
 # Define C compiler
-CC = icc
+CC = gcc
 
 # Define C++ compiler
-CXX = icpc
+CXX = g++
 
 # Define C preprocessor
 CPP = cpp
@@ -23,6 +23,8 @@ F77FLAGS = -O3 -cpp -g
 FFLAGS   = -O3 -cpp -g
 # Uncomment if OpenMP support is desired
 FFLAGS  += -qopenmp
+# If you are running out of space on the stack, use this instead of openmp
+#FFLAGS  += -heap-arrays
 
 LFLAGS = -lifcore -qopenmp
 
