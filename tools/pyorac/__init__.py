@@ -11,4 +11,4 @@ import pyorac.swath
 import pyorac.util
 
 __author__ = "Adam Povey"
-__version__ = "3.01"
+__version__ = "3.02"

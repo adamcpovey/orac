@@ -113,7 +113,7 @@ class BatchSystem:
 #-----------------------------------------------------------------------------
 
 # QSUB, used by the Oxford Yau cluster
-qsub = BatchSystem(
+QSUB = BatchSystem(
     'qsub',
     r'Your job (?P<ID>\d+) \("(?P<job_name>[\w\.-]+)"\) has been submitted',
     '-hold_jid%%{}', ',', '',
@@ -130,7 +130,7 @@ qsub = BatchSystem(
 )
 
 # BSUB, used by the JASMIN cluster at RAL
-bsub = BatchSystem(
+BSUB = BatchSystem(
     'bsub',
     r'Job <(?P<ID>\d+)> is submitted to (?P<desc>[\w\s]*)queue '
     r'<(?P<queue>[\w\.-]+)>.', '-w%%ended({})', ')&&ended(', '',
@@ -150,7 +150,7 @@ bsub = BatchSystem(
 )
 
 # SLURM, the new Oxford queuing system
-slurm = BatchSystem(
+SLURM = BatchSystem(
     'sbatch',
     r'Submitted batch job (?P<ID>\d+)', '--dependency=afterok:{}', ':', """
 if [ -n "$SLURM_CPUS_PER_TASK" ]; then
