@@ -44,8 +44,8 @@ INC  += -DINCLUDE_NR
 #INC  += -DINCLUDE_FU_LIOU_SUPPORT
 
 # Uncomment if Himawari support is desired.
-#LIBS += -lhimawari_util
-#INC  += -DINCLUDE_HIMAWARI_SUPPORT
+LIBS += -lhimawari_util
+INC  += -DINCLUDE_HIMAWARI_SUPPORT
 
 # Uncomment if SEVIRI support is desired.
 LIBS += -lseviri_util

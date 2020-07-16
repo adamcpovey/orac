@@ -57,7 +57,7 @@ AUXILIARIES = {
     'usgs_file'   : _LOCAL + '/LSM/Aux_file_CM_SAF_AVHRR_GAC_ori_0.05deg.nc',
     # Pre-defined geometry for geostationary imager
     'prelsm_file' : _LOCAL + '/LSM/MSG_000E_LSM.nc',
-    'pregeo_file' : _LOCAL + '/LSM/MSG_000E_ANGLES.nc',
+    'pregeo_file' : _LOCAL + '/LSM/MSG_000E_ANGLES.v01.nc',
     # Climatology of Swansea s and p parameters
     'swansea_dir' : _LOCAL + '/swansea_cb'
 }
