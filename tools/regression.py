@@ -72,7 +72,7 @@ try:
         log_path = os.path.join(args.out_dir, defaults.LOG_DIR)
 
         # Check for regressions
-        if not args.benchmark:
+        if not args.benchmark and not args.dry_run:
             inst = FileName(args.out_dir, out_file)
             if not args.batch:
                 check_args_common(args)
