@@ -42,7 +42,7 @@ args_main(pars)
 args_postproc(pars)
 orig_args = pars.parse_args()
 
-check_args_regress(orig_args)
+orig_args = check_args_regress(orig_args)
 
 base_out_dir = deepcopy(orig_args.out_dir)
 
@@ -75,8 +75,8 @@ try:
         if not args.benchmark and not args.dry_run:
             inst = FileName(args.out_dir, out_file)
             if not args.batch:
-                check_args_common(args)
-                check_args_preproc(args)
+                args = check_args_common(args)
+                args = check_args_preproc(args)
                 try:
                     run_regression(inst)
                 except Regression as err:

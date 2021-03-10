@@ -12,3 +12,4 @@ import pyorac.util
 
 __author__ = "Adam Povey"
 __version__ = "3.02A"
+__website__ = "https://github.com/ORAC-CC/orac"

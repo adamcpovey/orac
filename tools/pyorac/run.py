@@ -20,7 +20,7 @@ def process_pre(args, log_path, dependency=None, tag='pre'):
     from pyorac.drivers import build_preproc_driver
     from pyorac.local_defaults import DIR_PERMISSIONS
 
-    check_args_preproc(args)
+    args = check_args_preproc(args)
     driver = build_preproc_driver(args)
 
     # This must be called after building the driver as revision is unknown
@@ -58,7 +58,7 @@ def process_main(args, log_path, tag='', dependency=None):
     from pyorac.drivers import build_main_driver
     from pyorac.local_defaults import DIR_PERMISSIONS
 
-    check_args_main(args)
+    args = check_args_main(args)
     if args.multilayer is not None:
         phase = args.phase + "_" + args.multilayer[0]
     else:
@@ -98,7 +98,7 @@ def process_post(args, log_path, files=None, dependency=None, tag='post'):
     from pyorac.drivers import build_postproc_driver
     from pyorac.local_defaults import DIR_PERMISSIONS
 
-    check_args_postproc(args)
+    args = check_args_postproc(args)
     job_name = args.File.job_name(args.revision, tag)
     root_name = args.File.root_name(args.revision)
 
@@ -216,8 +216,8 @@ def process_all(orig_args):
     compare = pars.parse_args("")
 
     # Copy input arguments as we'll need to fiddle with them
-    check_args_common(orig_args)
-    check_args_cc4cl(orig_args)
+    orig_args = check_args_common(orig_args)
+    orig_args = check_args_cc4cl(orig_args)
     log_path = os.path.join(orig_args.out_dir, LOG_DIR)
     args = deepcopy(orig_args)
 
@@ -248,7 +248,7 @@ def process_all(orig_args):
         phs_args.out_dir = os.path.join(orig_args.out_dir, phs_args.sub_dir)
 
         jid, out = process_main(phs_args, log_path, dependency=jid_pre,
-                                tag=args.label)
+                                tag=args.sub_dir + args.label)
         out_files.append(out)
         if jid is not None:
             jid_main.append(jid)
