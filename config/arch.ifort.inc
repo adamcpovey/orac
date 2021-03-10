@@ -17,10 +17,10 @@ CXX = g++
 CPP = cpp
 
 # Set Fortran 77 compiler flags
-F77FLAGS = -O3 -cpp -g
+F77FLAGS = -O3 -cpp -g -check bounds
 
 # Set Fortran 90 compiler flags
-FFLAGS   = -O3 -cpp -g
+FFLAGS   = -O3 -cpp -g -check bounds
 # Uncomment if OpenMP support is desired
 FFLAGS  += -qopenmp
 # If you are running out of space on the stack, use this instead of openmp
