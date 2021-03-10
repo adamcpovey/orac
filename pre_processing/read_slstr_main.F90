@@ -256,13 +256,7 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
          stop error_stop_code
       end if
 
-      ! Apply some correction factors
-      if (slstr_correction_factor(band_ids(i)) .gt. 0.0) then
-         imager_measurements%data(:,:,i) = imager_measurements%data(:,:,i) * &
-              slstr_correction_factor(band_ids(i))
-      end if
-
-      ! Other corrections have previously been applied in this code to minimise
+      ! Corrections have previously been applied in this code to minimise
       ! problems with the geolocation, dynamic range, and calibration of SLSTR.
       ! These have been removed at this point, as many are now included in the
       ! L1B files but may still be necessary for earlier data. The main one is
