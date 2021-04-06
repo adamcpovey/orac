@@ -36,10 +36,10 @@ def args_common(parser):
     key.add_argument('--batch_script', default=defaults.BATCH_SCRIPT,
                      help='Execution script to use in batch processing.')
     key.add_argument('-b', '--batch_settings', type=str, nargs=2, default=[],
-                     metavar=('KEY', 'VALUE'),
-                     action='append', help='Settings to pass to the batch '
-                                           'processing system. Passed as KEY VALUE pairs, where KEY '
-                                           'is one of ' + ', '.join(defaults.batch.args.keys()))
+                     metavar=('KEY', 'VALUE'), action='append',
+                     help='Settings to pass to the batch processing system. '
+                          'Passed as KEY VALUE pairs, where KEY is one of ' +
+                          ', '.join(defaults.BATCH.args.keys()))
     key.add_argument('--procs', type=int, default=1, metavar='#',
                      help='Number of processors to use. Default 1.')
     key.add_argument('-d', '--dry_run', action='store_true',
@@ -88,7 +88,7 @@ def args_preproc(parser):
                      default=[], metavar=('KEY', 'VALUE'),
                      help='Location of auxilliary files. Passed as KEY VALUE '
                           'pairs, where KEY is one of ' +
-                          ', '.join(defaults.auxiliaries.keys()))
+                          ', '.join(defaults.AUXILIARIES.keys()))
     key.add_argument('--no_predef', action='store_true',
                      help='For geostationary sensors, calculate geolocation '
                           'online, rather than load a predefined file.')
@@ -111,7 +111,7 @@ def args_preproc(parser):
                      default=[], metavar=('KEY', 'VALUE'),
                      help='Values for NCDF global attributes. Passed as KEY '
                           'VALUE pairs, where KEY is one of ' +
-                          ', '.join(defaults.global_attributes.keys()))
+                          ', '.join(defaults.GLOBAL_ATTRIBUTES.keys()))
     att.add_argument('--uuid', action='store_true',
                      help='Produce a unique identifier number for output.')
     att.add_argument('-r', '--revision', type=int, nargs='?', metavar='#',
@@ -208,7 +208,7 @@ def args_postproc(parser):
                            'Default 0.')
     post.add_argument('--no_switch_phase', action='store_false',
                       help='With cloud processing, do not check if CTT is '
-                           'appropriate for the selected type.. Only relevant '
+                           'appropriate for the selected type. Only relevant '
                            'when processing exclusively water and ice cloud.')
 
 
@@ -253,7 +253,7 @@ def args_cc4cl(parser):
                           ' listed for the main processor are available.')
     phs.add_argument('-S', '--preset_settings', type=str, default=None,
                      choices=defaults.RETRIEVAL_SETTINGS.keys(),
-                     help='Use a predefined setting for --settings, defined '
+                     help='Use a predefined input for --settings, defined '
                           'in the local_defaults.')
     phs.add_argument('--settings_file', type=str, default=None,
                      help='A file specifying the phases to run, one on '
@@ -318,11 +318,11 @@ def check_args_preproc(args):
     from pyorac.local_defaults import AUXILIARIES, GLOBAL_ATTRIBUTES
 
     # Add global attributes
-    GLOBAL_ATTRIBUTES.update({key : val for key, val in args.global_att})
+    GLOBAL_ATTRIBUTES.update({key: val for key, val in args.global_att})
     args.__dict__.update(GLOBAL_ATTRIBUTES)
 
     # Insert auxilliary locations
-    AUXILIARIES.update({key : val for key, val in args.aux})
+    AUXILIARIES.update({key: val for key, val in args.aux})
     args.__dict__.update(AUXILIARIES)
 
     try:
@@ -422,7 +422,7 @@ def check_args_cc4cl(args):
                                        RETRIEVAL_SETTINGS)
 
     # Add extra lines files
-    EXTRA_LINES.update({key + '_extra' : val for key, val in args.extra_lines})
+    EXTRA_LINES.update({key + '_extra': val for key, val in args.extra_lines})
     args.__dict__.update(EXTRA_LINES)
 
     log_path = os.path.join(args.out_dir, LOG_DIR)
