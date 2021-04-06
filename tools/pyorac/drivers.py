@@ -145,8 +145,8 @@ def build_preproc_driver(args):
             ))
             if os.path.isfile(occci):
                 break
-            else:
-                raise FileMissing('Ocean Colour CCI', occci)
+        else:
+            raise FileMissing('Ocean Colour CCI', occci)
     else:
         occci = ''
 

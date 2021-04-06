@@ -402,7 +402,6 @@ subroutine orac_preproc(mytask, ntasks, lower_bound, upper_bound, driver_path_fi
    integer, allocatable             :: chunk_ends(:)
 
    type(preproc_paths_t)            :: out_paths
-   type(setup_args_t)               :: granule
 
    type(channel_info_t)             :: channel_info
 
@@ -429,6 +428,7 @@ subroutine orac_preproc(mytask, ntasks, lower_bound, upper_bound, driver_path_fi
    type(preproc_prtm_t)             :: preproc_prtm, preproc_prtm1, preproc_prtm2
    type(preproc_surf_t)             :: preproc_surf
    type(preproc_cld_t)              :: preproc_cld
+   type(setup_args_t)               :: granule
 
    type(netcdf_output_info_t)       :: netcdf_info
 
