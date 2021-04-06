@@ -64,7 +64,6 @@
 subroutine Set_GZero(Tau, Re, Ctrl, SPixel, SAD_LUT, GZero, status)
 
    use Ctrl_m
-   use Int_Routines_m
    use SAD_LUT_m
    use SPixel_m
 
@@ -92,45 +91,33 @@ subroutine Set_GZero(Tau, Re, Ctrl, SPixel, SAD_LUT, GZero, status)
    ! Set the "zero'th" array indices for the interpolations, i.e. find the array
    ! indices of the nearest neighbour grid points in each dimension. Use the
    ! 'locate' function
+   GZero%iT0 = locate(SAD_LUT%Grid%Tau, Tau, .true.)
+   GZero%iR0 = locate(SAD_LUT%Grid%Re, Re, .true.)
    do i = 1, SPixel%Ind%Ny
-      GZero%iT0(i) = &
-         max(min(locate(SAD_LUT%Grid%Tau(1:SAD_LUT%Grid%nTau),Tau), &
-                 SAD_LUT%Grid%nTau-1),1)
-      GZero%iR0(i) = &
-         max(min(locate(SAD_LUT%Grid%Re (1:SAD_LUT%Grid%nRe ),Re), &
-                 SAD_LUT%Grid%nRe-1),1)
-      GZero%iSaZ0(i) = &
-         max(min(locate(SAD_LUT%Grid%SatZen(1:SAD_LUT%Grid%nSatzen),&
-                 SPixel%Geom%Satzen(SPixel%ViewIdx(i))),SAD_LUT%Grid%nSatzen-1),1)
-      GZero%iSoZ0(i) = &
-         max(min(locate(SAD_LUT%Grid%SolZen(1:SAD_LUT%Grid%nSolzen),&
-                 SPixel%Geom%Solzen(SPixel%ViewIdx(i))),SAD_LUT%Grid%nSolzen-1),1)
-      GZero%iSaZSoZ0(i) = &
-         max(min(locate(SAD_LUT%Grid%SolZen(1:SAD_LUT%Grid%nSolzen),&
-                 SPixel%Geom%Satzen(SPixel%ViewIdx(i))),SAD_LUT%Grid%nSolzen-1),1)
-      GZero%iRA0(i) = &
-         max(min(locate(SAD_LUT%Grid%Relazi(1:SAD_LUT%Grid%nRelazi),&
-                 SPixel%Geom%Relazi(SPixel%ViewIdx(i))),SAD_LUT%Grid%nRelazi-1),1)
+      GZero%iSaZ0(i) = locate(SAD_LUT%Grid%SatZen, &
+           SPixel%Geom%Satzen(SPixel%ViewIdx(i)), .true.)
+      GZero%iSoZ0(i) = locate(SAD_LUT%Grid%SolZen, &
+           SPixel%Geom%Solzen(SPixel%ViewIdx(i)), .true.)
+      GZero%ISaZSoZ0(i) = locate(SAD_LUT%Grid%SolZen, &
+           SPixel%Geom%Satzen(SPixel%ViewIdx(i)), .true.)
+      GZero%iRA0(i) = locate(SAD_LUT%Grid%Relazi, &
+           SPixel%Geom%Relazi(SPixel%ViewIdx(i)), .true.)
    end do
 
    ! This sets the upper bracketing index, the locate above set the lower index
-   do i = 1, SPixel%Ind%Ny
-      GZero%iT1(i)      = GZero%iT0(i)   + 1
-      GZero%iR1(i)      = GZero%iR0(i)   + 1
-
-      GZero%iSaZ1(i)    = GZero%iSaZ0(i) + 1
-      GZero%iSoZ1(i)    = GZero%iSoZ0(i) + 1
-      GZero%iRA1(i)     = GZero%iRA0(i)  + 1
-
-      GZero%iSaZSoZ1(i) = GZero%iSaZSoZ0(i) + 1
-   end do
+   GZero%iT1      = GZero%iT0   + 1
+   GZero%iR1      = GZero%iR0   + 1
+   GZero%iSaZ1    = GZero%iSaZ0 + 1
+   GZero%iSoZ1    = GZero%iSoZ0 + 1
+   GZero%iRA1     = GZero%iRA0  + 1
+   GZero%iSaZSoZ1 = GZero%iSaZSoZ0 + 1
 
    ! This sets the next pair of bracketing indices around the primary one
    do i = 1, SPixel%Ind%Ny
       if (GZero%iT0(i) == 1) then
          GZero%iTm1(i) = GZero%iT0(i)
          GZero%iTp1(i) = GZero%iT1(i)+1
-      else if (GZero%iT1(i) == SAD_LUT%Grid%nTau) then
+      else if (GZero%iT1(i) == SAD_LUT%Grid%Tau%n) then
          GZero%iTm1(i) = GZero%iT0(i)-1
          GZero%iTp1(i) = GZero%iT1(i)
       else
@@ -141,7 +128,7 @@ subroutine Set_GZero(Tau, Re, Ctrl, SPixel, SAD_LUT, GZero, status)
       if (GZero%iR0(i) == 1) then
          GZero%iRm1(i) = GZero%iR0(i)
          GZero%iRp1(i) = GZero%iR1(i)+1
-      else if (GZero%iR1(i) == SAD_LUT%Grid%nRe) then
+      else if (GZero%iR1(i) == SAD_LUT%Grid%Re%n) then
          GZero%iRm1(i) = GZero%iR0(i)-1
          GZero%iRp1(i) = GZero%iR1(i)
       else
@@ -156,22 +143,22 @@ subroutine Set_GZero(Tau, Re, Ctrl, SPixel, SAD_LUT, GZero, status)
 
    ! These variables are not used and could be removed? No, they are used!
    do i = 1, SPixel%Ind%Ny
-      GZero%dT(i) = (Tau - SAD_LUT%Grid%Tau(GZero%iT0(i))) / &
-         (SAD_LUT%Grid%Tau(GZero%iT1(i)) - SAD_LUT%Grid%Tau(GZero%iT0(i)))
-      GZero%dR(i) = (Re - SAD_LUT%Grid%Re(GZero%iR0(i))) / &
-         (SAD_LUT%Grid%Re(GZero%iR1(i)) - SAD_LUT%Grid%Re(GZero%iR0(i)))
+      GZero%dT(i) = (Tau - SAD_LUT%Grid%Tau%x(GZero%iT0(i))) / &
+         (SAD_LUT%Grid%Tau%x(GZero%iT1(i)) - SAD_LUT%Grid%Tau%x(GZero%iT0(i)))
+      GZero%dR(i) = (Re - SAD_LUT%Grid%Re%x(GZero%iR0(i))) / &
+         (SAD_LUT%Grid%Re%x(GZero%iR1(i)) - SAD_LUT%Grid%Re%x(GZero%iR0(i)))
       GZero%dSaZ(i) = &
-         (SPixel%Geom%SatZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SatZen(GZero%iSaZ0(i))) / &
-         (SAD_LUT%Grid%SatZen(GZero%iSaZ1(i)) - SAD_LUT%Grid%SatZen(GZero%iSaZ0(i)))
+         (SPixel%Geom%SatZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SatZen%x(GZero%iSaZ0(i))) / &
+         (SAD_LUT%Grid%SatZen%x(GZero%iSaZ1(i)) - SAD_LUT%Grid%SatZen%x(GZero%iSaZ0(i)))
       GZero%dSoZ(i) = &
-         (SPixel%Geom%SolZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SolZen(GZero%iSoZ0(i))) / &
-         (SAD_LUT%Grid%SolZen(GZero%iSoZ1(i)) - SAD_LUT%Grid%SolZen(GZero%iSoZ0(i)))
+         (SPixel%Geom%SolZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SolZen%x(GZero%iSoZ0(i))) / &
+         (SAD_LUT%Grid%SolZen%x(GZero%iSoZ1(i)) - SAD_LUT%Grid%SolZen%x(GZero%iSoZ0(i)))
       GZero%dSaZSoZ(i) = &
-         (SPixel%Geom%SatZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SolZen(GZero%iSaZSoZ0(i))) / &
-         (SAD_LUT%Grid%SolZen(GZero%iSaZSoZ1(i)) - SAD_LUT%Grid%SolZen(GZero%iSaZSoZ0(i)))
+         (SPixel%Geom%SatZen(SPixel%ViewIdx(i)) - SAD_LUT%Grid%SolZen%x(GZero%iSaZSoZ0(i))) / &
+         (SAD_LUT%Grid%SolZen%x(GZero%iSaZSoZ1(i)) - SAD_LUT%Grid%SolZen%x(GZero%iSaZSoZ0(i)))
       GZero%dRA(i) = &
-         (SPixel%Geom%RelAzi(SPixel%ViewIdx(i)) - SAD_LUT%Grid%RelAzi(GZero%iRA0(i))) / &
-         (SAD_LUT%Grid%RelAzi(GZero%iRA1(i)) - SAD_LUT%Grid%RelAzi(GZero%iRA0(i)))
+         (SPixel%Geom%RelAzi(SPixel%ViewIdx(i)) - SAD_LUT%Grid%RelAzi%x(GZero%iRA0(i))) / &
+         (SAD_LUT%Grid%RelAzi%x(GZero%iRA1(i)) - SAD_LUT%Grid%RelAzi%x(GZero%iRA0(i)))
    end do
 
    ! Calculate 1.0 minus each of the d values above - used several times by the

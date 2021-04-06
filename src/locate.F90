@@ -19,54 +19,87 @@
 !
 ! History:
 ! 2017/10/02, GM: Original version
+! 2020/08/18, AP: Use dVariable = 0 to indicate unevenly spaced grids. Switch
+!    to using arithmetic index finding for evenly spaced grids.
+! 2020/09/25, AP: Add bounded keyword, restricting output to [1, n-1]
 !
 ! Bugs:
 ! None known.
 !-------------------------------------------------------------------------------
 
-function locate(a,x) result(low)
+function locate(grid, x, bounded) result(low)
 
    implicit none
 
-   real, intent(in) :: a(:)
-   real, intent(in) :: x
+   type(LUT_Dimension_t), intent(in) :: grid
+   real,                  intent(in) :: x
+   logical,               intent(in), optional :: bounded
 
-   logical :: ascending
-   integer :: n, low, mid, up
+   logical :: ascending, bound
+   integer :: low, mid, up
 
-   n = size(a)
-   if (n .eq. 0) then
+   if (grid%n .eq. 0) then
       low = 0
       return
    end if
 
-   ascending = a(1) .le. a(n)
+   if (present(bounded)) then
+      bound = bounded
+   else
+      bound = .false.
+   end if
+   ascending = grid%x(1) .le. grid%x(grid%n)
+
+   if (grid%d .ne. 0.) then
+      low = int((x - grid%x(1)) / grid%d)
+      if (bound) then
+         if (low .lt. 1) low = 1
+         if (low .ge. grid%n) low = grid%n-1
+      end if
+      return
+   end if
 
    if (ascending) then
-      if (x .lt. a(1)) then
-         low = 0
+      if (x .lt. grid%x(1)) then
+         if (bound) then
+            low = 1
+         else
+            low = 0
+         end if
          return
-      else if (x .gt. a(n)) then
-         low = n
+      else if (x .gt. grid%x(grid%n)) then
+         if (bound) then
+            low = grid%n-1
+         else
+            low = grid%n
+         end if
          return
       end if
    else
-      if (x .gt. a(1)) then
-         low = 0
+      if (x .gt. grid%x(1)) then
+         if (bound) then
+            low = 1
+         else
+            low = 0
+         end if
          return
-      else if (x .lt. a(n)) then
-         low = n
+      else if (x .lt. grid%x(grid%n)) then
+         if (bound) then
+            low = grid%n-1
+         else
+            low = grid%n
+         end if
          return
       end if
    end if
 
    low = 1
-   up  = n
+   up  = grid%n
 
    do while (low + 1 .lt. up)
       mid = (low + up) / 2
 
-      if (ascending .eqv. (a(mid) .le. x)) then
+      if (ascending .eqv. (grid%x(mid) .le. x)) then
          low = mid
       else
          up  = mid
