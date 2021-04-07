@@ -76,6 +76,7 @@
 !    considering...
 ! 2019/08/14, SP: Add Fengyun-4A support.
 ! 2021/03/09, AP: Add radiance bias corrections.
+! 2021/03/10, AP: Gather setup calls into a single routine.
 !
 ! Bugs:
 ! None known.
