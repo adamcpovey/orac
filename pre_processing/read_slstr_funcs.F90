@@ -407,46 +407,6 @@ subroutine slstr_get_alignment(indir, startx, endx, given_alignment, &
    print*, 'Oblique start, end: ', sx_obl, ex_obl
 #endif
 
-   if (bdiff .eq. 9e15) then
-      write(*,*) 'ERROR: slstr_get_alignment(): unable to determine alignment.'
-      stop error_stop_code
-   end if
-   deallocate(ndlons)
-   deallocate(oblons)
-#endif
-
-   ! Determine start/end of orbit segment in the oblique view
-   if (startx .lt. alignment) then
-      sx_nad = alignment
-      sx_obl = 1
-   else if (startx .ge. alignment+obnx) then
-      write(*,*) ' WARNING: read_slstr(): Oblique view requested for ', &
-           'unavailable segment of orbit. Require startx <', alignment+obnx
-      sx_nad = 0
-      sx_obl = 0
-   else
-      sx_nad = startx
-      sx_obl = startx - alignment + 1
-   end if
-
-   if (endx .lt. alignment) then
-      write(*,*) 'WARNING: read_slstr(): Oblique view requested for ', &
-           'unavailable segment of orbit. Require endx >', alignment
-      ex_nad = 0
-      ex_obl = 0
-   else if (endx .ge. alignment+obnx) then
-      ex_nad = alignment + obnx - 1
-      ex_obl = obnx
-   else
-      ex_nad = endx
-      ex_obl = endx - alignment + 1
-   end if
-
-#ifdef DEBUG
-   print*, 'Nadir start, end: ', sx_nad, ex_nad
-   print*, 'Oblique start, end: ', sx_obl, ex_obl
-#endif
-
 end subroutine slstr_get_alignment
 
 
