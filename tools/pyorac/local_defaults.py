@@ -20,7 +20,7 @@ except KeyError:
 SAD_DIRS = ['/network/aopp/apres/ORAC_LUTS', ]
 
 # Use ECMWF data from the BADC/CEMS archive
-ECMWF_FLAG = 5
+NWP_FLAG = 5
 
 # If any of these directories contain subdirectories named by date, please use
 # the syntax of datatime.strftime() to denote the folder structure.
