@@ -182,6 +182,8 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
       ! Get alignment factor between oblique and nadir views
       call slstr_get_alignment(indir, startx, endx, alignment, sx_nad, sx_obl, &
            ex_nad, ex_obl)
+      if (verbose) write(*,*) 'Alignment: ', alignment, sx_nad, sx_obl, &
+           ex_nad, ex_obl
    end if
 
    ! Get interpolation factors between reduced and TIR grid for each pixel

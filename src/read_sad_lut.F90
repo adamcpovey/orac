@@ -66,7 +66,7 @@ subroutine grid_dimension_read(filename, n_name, d_name, v_name, lun, Grid)
 
    if (n2 .gt. Grid%NMax) then
       write(*,*) 'ERROR: grid_dimension_read(): LUT grid dimension size for ', &
-                 trim(v_name), ' is greater than maximum size allowed'
+                 trim(v_name), ' is greater than maximum size allowed ', n2, grid%max
       stop LUTFileReadErr
    end if
 
@@ -934,6 +934,7 @@ subroutine Read_NCDF_SAD_LUT(Ctrl, platform, LUTClass, SAD_LUT, SAD_Chan)
    real, allocatable, dimension(:,:,:)       :: R_dd, T_dd
    real, allocatable, dimension(:,:,:,:)     :: R_dv, T_dv, R_0d, T_00, T_0d, E_md
    real, allocatable, dimension(:,:,:,:,:,:) :: R_0v
+
    real,    allocatable, dimension(:) :: chan_tmp_real
    integer, allocatable, dimension(:) :: chan_tmp_int
 
