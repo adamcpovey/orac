@@ -459,17 +459,7 @@ subroutine read_seviri_l1_5_nat_or_hrit(l1_5_file, imager_geolocation, &
       preproc%vza  => imager_angles%satzen(startx:,:,1)
       preproc%vaa  => imager_angles%satazi(startx:,:,1)
       preproc%data => imager_measurements%data(startx:,:,:)
-
-      if (verbose) then
-         if (do_gsics) then
-            write(*,*) 'Applying GSICS calibration coefficients'
-         else
-            write(*,*) 'Applying IMPF calibration coefficients'
-         end if
-         if (do_nasa) then
-            write(*,*) 'Applying NASA VIS calibration coefficients'
-         end if
-      end if
+      preproc%cal_slope => imager_measurements%cal_gain(:)
 
       ! The main reader call which populates preproc (type seviri_preproc_t_f90)
       if (verbose) write(*,*) 'Calling seviri_read_and_preproc_f90() from ' // &
@@ -486,8 +476,8 @@ subroutine read_seviri_l1_5_nat_or_hrit(l1_5_file, imager_geolocation, &
       if (verbose) write(*,*) 'Calling seviri_read_and_preproc_f90() from ' // &
                               'the seviri_util module, FD'
       if (seviri_read_and_preproc_f90(trim(l1_5_file)//C_NULL_CHAR, preproc, &
-          n_bands, band_ids, band_units, SEVIRI_BOUNDS_FULL_DISK, 0, 0, &
-          0, 0, 0.d0, 0.d0, 0.d0, 0.d0, do_gsics, global_atts%Satpos_Metadata, .false.) .ne. 0) then
+          n_bands, band_ids, band_units, SEVIRI_BOUNDS_FULL_DISK, 1, 3712, &
+          1, 3712, 0.d0, 0.d0, 0.d0, 0.d0, do_gsics, do_nasa, global_atts%Satpos_Metadata, .false.) .ne. 0) then
          write(*,*) 'ERROR: in read_seviri_l1_5(), calling ' // &
                     'seviri_read_and_preproc_f90(), filename = ', trim(l1_5_file)
          stop error_stop_code
@@ -501,11 +491,7 @@ subroutine read_seviri_l1_5_nat_or_hrit(l1_5_file, imager_geolocation, &
       imager_angles%satzen(startx:,:,1)       = preproc%vza(column0+1:column1+1,line0+1:line1+1)
       !imager_angles%satazi(startx:,:,1)       = preproc%vaa(column0+1:column1+1,line0+1:line1+1)
       imager_measurements%data(startx:,:,:)   = preproc%data(column0+1:column1+1,line0+1:line1+1,:)
-
-      ! Offset subset for inversion of satazi
-      ! NOTE: THIS SHOULD BE REMOVED ONCE THE EXTERNAL LIBRARY OUTPUTS
-      ! THE SATELLITE AZIMUTH IN THE CORRECT ORIENTATION
-      imager_angles%satazi(startx:,:,1)       = preproc%vaa(n_across_track-column1:n_across_track-column0,line0+1:line1+1)
+      imager_measurements%cal_gain(:)         = preproc%cal_slope(:)
    end if
 
    ! Remove underscores added by seviri_util (easy way of converting c-string to

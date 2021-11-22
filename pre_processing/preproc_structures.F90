@@ -110,6 +110,7 @@ module preproc_structures_m
       integer, pointer           :: channel_ids(:)
       integer(kind=lint)         :: n_channels
       integer                    :: slstr_alignment
+      logical                    :: calculate_slstr_alignment
       integer                    :: nwp_time_factor
       real                       :: swansea_gamma
       logical                    :: use_camel_emis

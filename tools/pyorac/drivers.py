@@ -101,7 +101,7 @@ def build_preproc_driver(args):
                               ('ECMWF_ERA_%Y%m%d_%H+00_0.5.nc', 6)):
             try:
                 bounds = _bound_time(args.File.time + args.File.dur // 2, ec_hour)
-                ggam = _form_bound_filenames(bounds, args.ggam_dir, form)
+                ggam = _form_bound_filenames(bounds, args.ecmwf_dir, form)
                 break
             except FileMissing as tmp_err:
                 err = tmp_err
@@ -113,7 +113,7 @@ def build_preproc_driver(args):
     elif args.nwp_flag == 2:
         ecmwf_nlevels = 137
         # Interpolation is done in the code
-        ggam = [args.ggam_dir, args.ggam_dir]
+        ggam = [args.ecmwf_dir, args.ecmwf_dir]
         ggas = ["", ""]
         spam = ["", ""]
     else:
@@ -307,9 +307,9 @@ USE_SWANSEA_CLIMATOLOGY={args.swansea}"""
 
     if args.File.predef and not args.no_predef:
         driver += f"""
-USE_PREDEF_LSM=True
+USE_PREDEF_LSM=False
 EXT_LSM_PATH={args.prelsm_file}
-USE_PREDEF_GEO=True
+USE_PREDEF_GEO=False
 EXT_GEO_PATH={args.pregeo_file}"""
 
     if args.product_name is not None:
@@ -350,17 +350,28 @@ Ctrl%RS%Use_Full_BRDF       = {use_brdf}""".format(
         use_brdf=not (args.lambertian or args.approach == 'AppAerSw'),
         verbose=args.verbose,
     )
+    # If a netcdf LUT is being used then write NCDF LUT filename
+    if SETTINGS[args.phase].sad == 'netcdf':
+        driver += """
+Ctrl%FID%NCDF_LUT_Filename = "{ncdf_lut_filename}"
+        """.format(ncdf_lut_filename=SETTINGS[args.phase].sad_filename(args.File))
 
     # Optional driver file lines
     if args.multilayer is not None:
+        if SETTINGS[args.phase].sad == 'netcdf':
+            driver += """
+Ctrl%FID%NCDF_LUT_Filename2 = "{ncdf_lut_filename}"
+        """.format(ncdf_lut_filename=SETTINGS[args.multilayer[0]].sad_filename(args.File))
         driver += """
 Ctrl%LUTClass2              = "{}"
 Ctrl%FID%SAD_Dir2           = "{}"
 Ctrl%Class2                 = {}""".format(
-            args.multilayer[0],
+            SETTINGS[args.multilayer[0]].name,
             SETTINGS[args.multilayer[0]].sad_dir(args.sad_dirs, args.File),
             args.multilayer[1],
         )
+        for var in SETTINGS[args.multilayer[0]].inv:
+            driver += var.driver()
     if args.types:
         driver += "\nCtrl%NTypes_To_Process      = {:d}".format(len(args.types))
         driver += ("\nCtrl%Types_To_Process(1:{:d}) = ".format(len(args.types)) +

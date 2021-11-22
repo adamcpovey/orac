@@ -96,7 +96,7 @@ end subroutine read_slstr_dimensions
 ! verbose             logical in   If true then print verbose information.
 !-------------------------------------------------------------------------------
 subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
-   imager_angles, imager_time, imager_flags, channel_info, alignment, verbose)
+   imager_angles, imager_time, imager_flags, channel_info, calculate_alignment, verbose)
 
    use iso_c_binding
    use calender_m
@@ -114,7 +114,7 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
    type(imager_time_t),         intent(inout) :: imager_time
    type(imager_flags_t),        intent(inout) :: imager_flags
    type(channel_info_t),        intent(in)    :: channel_info
-   integer,                     intent(in)    :: alignment
+   logical,                     intent(in)    :: calculate_alignment
    logical,                     intent(in)    :: verbose
 
    integer                       :: i, j
@@ -130,7 +130,7 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
    real(kind=sreal), allocatable :: txlons(:,:)
    real(kind=sreal), allocatable :: interp(:,:,:)
 
-   integer(kind=sint)            :: surface_flag(imager_geolocation%nx,imager_geolocation%ny)
+   integer(kind=lint)            :: surface_flag(imager_geolocation%nx,imager_geolocation%ny)
    integer                       :: txnx, txny
    integer                       :: sx_nad, sx_obl, ex_nad, ex_obl
 
@@ -180,10 +180,9 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
 
    if (imager_angles%nviews .eq. 2) then
       ! Get alignment factor between oblique and nadir views
-      call slstr_get_alignment(indir, startx, endx, alignment, sx_nad, sx_obl, &
-           ex_nad, ex_obl)
-      if (verbose) write(*,*) 'Alignment: ', alignment, sx_nad, sx_obl, &
-           ex_nad, ex_obl
+      call slstr_get_alignment(indir, startx, endx, calculate_alignment, &
+           sx_nad, sx_obl, ex_nad, ex_obl)
+      if (verbose) write(*,*) 'Alignment: ', sx_nad, sx_obl, ex_nad, ex_obl
    end if
 
    ! Get interpolation factors between reduced and TIR grid for each pixel
@@ -217,7 +216,7 @@ subroutine read_slstr(infile, imager_geolocation, imager_measurements, &
    !   128: spare            32768: summary_pointing
    ! To be consistent with read_modis_time-lat_lon_angles(), we accept
    ! only classes 2 and 16 as sea.
-   call read_slstr_int_field(indir, 'flags', 'in', 'confidence', startx, starty, &
+   call read_slstr_lint_field(indir, 'flags', 'in', 'confidence', startx, starty, &
         surface_flag)
    where (btest(surface_flag, 1) .or. btest(surface_flag, 4))
       imager_flags%lsflag = 0

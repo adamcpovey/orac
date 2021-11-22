@@ -259,8 +259,6 @@ subroutine read_himawari_bin(infile, imager_geolocation, imager_measurements, &
    integer                     :: startx, nx
    integer                     :: starty, ny
    integer                     :: x, y
-   integer(c_int)              :: line0, line1
-   integer(c_int)              :: column0, column1
 
 #ifdef __ACC
    real(kind=sreal), dimension(:,:), allocatable :: tlat, tlon
@@ -323,6 +321,9 @@ subroutine read_himawari_bin(infile, imager_geolocation, imager_measurements, &
                  'AHI_Main_Read(), filename = ', trim(infile)
       stop error_stop_code
    end if
+
+   ! Set the VIS channel gains read from HSD files
+   imager_measurements%cal_gain = preproc%cal_slope
 
    ! Copy arrays between the reader and ORAC. This could (should!) be done more efficiently.
    imager_time%time(:,:)             = preproc%time

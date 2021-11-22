@@ -316,9 +316,9 @@
 !
 ! Bugs:
 ! See http://proj.badc.rl.ac.uk/orac/report/1
-! 
-! 
-! 
+!
+!
+!
 ! NOTES:
 ! The nwp_flag option allows the user to set what type of NWP data to use.
 ! There are five options for this flag:
@@ -495,13 +495,10 @@ subroutine orac_preproc(mytask, ntasks, lower_bound, upper_bound, driver_path_fi
    preproc_opts%use_swansea_climatology  = .false.
    preproc_opts%swansea_gamma            = 0.3
 
-   ! When defined, the offset between the nadir and oblique views is assumed
-   ! to be constant. Otherwise, the two longitude fields are read and compared
-   ! to determine an appropriate offset. The value below is the mode of running
-   ! slstr_get_alignment() on each row of 1000 random SLSTR (A) images. 548 was
-   ! returned in 1e5 cases. 546-551 were returned O(1e3) times, while other
-   ! values in the range 530-570 each appeared < 1e2 times.
-   preproc_opts%slstr_alignment = 548
+   ! When true, the offset between the nadir and oblique views is read from
+   ! the track_offset global attribute. Otherwise, the two longitude fields are
+   ! read and compared to determine an appropriate offset.
+   preproc_opts%calculate_slstr_alignment = .false.
 
    ! Initialise satellite position string
    global_atts%Satpos_Metadata = 'null'
@@ -697,9 +694,7 @@ subroutine orac_preproc(mytask, ntasks, lower_bound, upper_bound, driver_path_fi
 
    if (granule%startx.ge.1 .and. granule%endx.ge.1 .and. &
         granule%starty.ge.1 .and. granule%endy.ge.1) then
-      if ( trim(adjustl(granule%sensor)) .eq. 'ABI'    .or. &
-           trim(adjustl(granule%sensor)) .eq. 'AGRI'   .or. &
-           trim(adjustl(granule%sensor)) .eq. 'VIIRSI' .or. &
+      if ( trim(adjustl(granule%sensor)) .eq. 'VIIRSI' .or. &
            trim(adjustl(granule%sensor)) .eq. 'VIIRSM') then
          write(*,*) 'ERROR: subsetting not supported for ', trim(granule%sensor)
          stop error_stop_code
