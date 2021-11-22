@@ -100,8 +100,8 @@ module channel_structures_m
       real(kind=sreal),   dimension(:), pointer :: channel_fm_sea_uncertainty
 
       ! Bias correction for each channel
-      real(kind=sreal,    dimension(:), pointer :: channel_absolute_bias
-      real(kind=sreal,    dimension(:), pointer :: channel_relative_bias
+      real(kind=sreal),   dimension(:), pointer :: channel_absolute_bias
+      real(kind=sreal),   dimension(:), pointer :: channel_relative_bias
 
    end type channel_info_t
 
