@@ -10,8 +10,8 @@ LIBS = -L$(ORAC_LIBBASE)/lib -L$(ORAC_LIBBASE_FORTRAN)/lib \
        -lmfhdf -lmfhdf_fortran -lmfhdf_fcstub -lhdf \
        -lnetcdff \
        -lnetcdf \
-       -lrttov12_coef_io -lrttov12_emis_atlas -lrttov12_hdf \
-       -lrttov12_parallel -lrttov12_main -lrttov12_other \
+       -lrttov13_coef_io -lrttov13_emis_atlas -lrttov13_hdf \
+       -lrttov13_parallel -lrttov13_main -lrttov13_other \
        -lhdf5 -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran \
        -lszip \
        -ljpeg -lm -lz -lstdc++ -lblas -llapack
