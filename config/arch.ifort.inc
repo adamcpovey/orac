@@ -8,10 +8,10 @@ F77 = ifort
 F90 = ifort
 
 # Define C compiler
-CC = gcc
+CC = icc
 
 # Define C++ compiler
-CXX = g++
+CXX = icpc
 
 # Define C preprocessor
 CPP = cpp

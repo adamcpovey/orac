@@ -478,10 +478,10 @@ subroutine setup_agri(args, channel_ids_user, channel_info, verbose)
    ! Bias correction
    real,    parameter :: all_channel_absolute_bias(all_nchannels_total) = &
       (/ 0.,      0.,      0.,      0.,      0.,      0.,      0., &
-         0.,      0.,      0.,      0.,      0.,      0.     /)
+         0.,      0.,      0.,      0.,      0.,      0.,      0.     /)
    real,    parameter :: all_channel_relative_bias(all_nchannels_total) = &
       (/ 1.,      1.,      1.,      1.,      1.,      1.,      1., &
-         1.,      1.,      1.,      1.,      1.,      1.     /)
+         1.,      1.,      1.,      1.,      1.,      1.,      1.     /)
 
    ! Only this below needs to be set to change the desired default channels. All
    ! other channel related arrays/indexes are set automatically given the static
