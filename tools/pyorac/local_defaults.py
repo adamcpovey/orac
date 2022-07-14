@@ -17,18 +17,18 @@ except KeyError:
     ORAC_LIB = ORAC_DIR + '/config/lib.inc'
 
 # Directory of look-up tables
-SAD_DIRS = ['/network/aopp/apres/ORAC_LUTS', ]
+SAD_DIRS = ['/network/aopp/apres/ORAC_LUTS', '/network/group/aopp/eodg/RGG004_GRAINGER_ORACFILE/ORAC_LUTS']
 
-# Use ECMWF data from the BADC/CEMS archive
-NWP_FLAG = 5
+# Use single-file ERA5 data
+NWP_FLAG = 1
 
 # If any of these directories contain subdirectories named by date, please use
 # the syntax of datatime.strftime() to denote the folder structure.
 AUXILIARIES = {
     # Directory containing RTTOV emissivity atlas
-    'atlas_dir'   : _LOCAL + '/rtcoef_rttov12/emis_data',
+    'atlas_dir'   : _LOCAL + '/rtcoef_rttov13/emis_data',
     # Directory of RTTOV instrument coefficient files
-    'coef_dir'    : _LOCAL + '/rtcoef_rttov12',
+    'coef_dir'    : _LOCAL + '/rtcoef_rttov13',
     # Directory of MODIS emisivity retrievals
     'emis_dir'    : _LOCAL + '/emissivity',
     'camel_dir'   : _LOCAL + '/emissivity',
@@ -37,13 +37,13 @@ AUXILIARIES = {
     'mcd43c3_dir' : _LOCAL + '/albedo',
     # To use ECMWF data from the BADC/CEMS archive (ecmwf_flag == 2), specifiy
     # where each of the three types of file are stored
-    'ggam_dir'    : _LOCAL + '/ecmwf',
-    'ggas_dir'    : _LOCAL + '/ecmwf',
-    'spam_dir'    : _LOCAL + '/ecmwf',
+    #'ggam_dir'    : _LOCAL + '/ecmwf',
+    #'ggas_dir'    : _LOCAL + '/ecmwf',
+    #'spam_dir'    : _LOCAL + '/ecmwf',
     # To use ERA5 (ecmwf_flag == 0), specify their location
     'ecmwf_dir'   : _LOCAL + '/ecmwf',
     # Directory of high-resolution ECMWF files
-    'hr_dir'      : _LOCAL + '/ecmwf/era_hr',
+    #'hr_dir'      : _LOCAL + '/ecmwf/era_hr',
     # Directory to store the EMOS interpolation file (CF_T0255_R0036000, which
     # will be generated if not already present)
     'emos_dir'    : _LOCAL,
@@ -55,6 +55,7 @@ AUXILIARIES = {
     'calib_file'  : _LOCAL + '/AATSR_VIS_DRIFT_V03-00.DAT',
     # File containing the USGS land-use map
     'usgs_file'   : _LOCAL + '/LSM/Aux_file_CM_SAF_AVHRR_GAC_ori_0.05deg.nc',
+    #'usgs_file'   : _LOCAL + '/LSM/global_lsm.nc,'
     # Pre-defined geometry for geostationary imager
     'prelsm_file' : _LOCAL + '/LSM/MSG_000E_LSM.nc',
     'pregeo_file' : _LOCAL + '/LSM/MSG_000E_ANGLES.v01.nc',

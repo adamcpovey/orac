@@ -600,16 +600,9 @@ class ParticleType:
 
         try:
             for fdr in sad_dirs:
-                if "AVHRR" in inst.sensor:
-                    fdr_name = join(fdr, inst.sensor.lower() + "-" +
-                                    inst.noaa + "_" + self.sad)
-                else:
-                    # Folder structure on JASMIN
-                    # fdr_name = join(fdr, inst.sensor.lower() + "_" + self.sad)
-
-                    # Folder structure on local
-                    fdr_name = join(fdr, inst.sensor.lower(),
-                                    inst.platform.upper(), self.sad)
+                # Folder structure on local
+                fdr_name = join(fdr, inst.sensor.lower(),
+                                inst.platform.upper(), self.sad)
                 if not rayleigh:
                     fdr_name += "_no_ray"
 
