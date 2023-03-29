@@ -381,7 +381,13 @@ class FileName:
                 except FileNotFoundError:
                     pass
             else:
-                warn(OracWarning("SLSTR start time unknown."))
+                warn(OracWarning("SLSTR start time approximated"))
+                self.time = datetime.datetime(
+                    int(mat.group('year')), int(mat.group('month')),
+                    int(mat.group('day')), int(mat.group('hour')),
+                    int(mat.group('min')), int(mat.group('sec'))
+                )
+                self.orbit_num = 0
 
             return
 
@@ -515,14 +521,12 @@ class Invpar:
 
     def __init__(self, var, ap=None, fg=None, sx=None):
         self.var = var
-        if ap:
-            self.ap = ap
-            if fg is None:
-                self.fg = ap
-        if fg:
+        self.ap = ap
+        if fg is None:
+            self.fg = ap
+        else:
             self.fg = fg
-        if sx:
-            self.sx = sx
+        self.sx = sx
 
     def driver(self):
         """Output lines for a driver file to specify these settings"""
