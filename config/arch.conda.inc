@@ -14,12 +14,12 @@ CC = $(GCC)
 CXX = $(GXX)
 
 # Set Fortran 77 compiler flags
-F77FLAGS  = -O3 -cpp -ffree-line-length-0 -g -fcheck=bounds
+F77FLAGS  = -O3 -cpp -ffree-line-length-0 -g -fcheck=bounds -fallow-argument-mismatch
 # Uncomment if extra warnings are required.  Take out -Werror if that annoys you.
 #FF77LAGS += -Wall -Werror -Wno-conversion -Wno-uninitialized -Wno-unused-dummy-argument -Wtabs
 
 # Set Fortran 90 compiler flags
-FFLAGS    = -O3 -cpp -ffree-line-length-0 -g -fcheck=bounds
+FFLAGS    = -O3 -cpp -ffree-line-length-0 -g -fcheck=bounds -fallow-argument-mismatch
 # Uncomment if OpenMP support is desired. Highly recommented.
 FFLAGS   += -fopenmp
 # Uncomment if extra warnings are required.  Take out -Werror if that annoys you.

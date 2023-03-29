@@ -395,12 +395,19 @@ class FileName:
         )
         if mat:
             self.sensor = mat.group('sensor')
-            self.platform = mat.group('platform')
-            if 'ATSR' in mat.group('sensor'):
-                # SAD file names don't include platform for ATSR instruments
-                self.inst = mat.group('sensor')
+            if self.sensor == 'SLSTR':
+                # SLSTR uses its own hyphening
+                self.platform = 'Sentinel-3' + mat.group('platform')[-1].lower()
             else:
-                self.inst = mat.group('sensor') + '-' + mat.group('platform').upper()
+                self.platform = mat.group('platform')
+            if 'ATSR' in self.sensor:
+                # SAD file names don't include platform for ATSR instruments
+                self.inst = self.sensor
+            elif self.sensor == 'SLSTR':
+                # SLSTR doesn't capitalise the platform name
+                self.inst = self.sensor + '-' + self.platform
+            else:
+                self.inst = self.sensor + '-' + self.platform.upper()
             self.time = datetime.datetime(
                 int(mat.group('year')), int(mat.group('month')),
                 int(mat.group('day')), int(mat.group('hour')),
@@ -590,7 +597,7 @@ class ParticleType:
                                   'p' + self.microphysical_model,
                                   'v' + self.version + '.nc'))
         else:
-            file_name = "_".join((inst.inst, self.name, "RBD", "Ch*.sad"))
+            file_name = "_".join((inst.inst, self.name, "RD", "Ch*.sad"))
         return file_name
 
     def sad_dir(self, sad_dirs, inst, rayleigh=True):

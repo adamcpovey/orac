@@ -58,3 +58,6 @@
 /tools/*.pyc
 /tools/pyorac/__pycache__
 /tools/pyorac/*.pyc
+
+# /feedstocks/
+/feedstocks/*/conda_build_config.yaml

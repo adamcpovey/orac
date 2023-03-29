@@ -2,15 +2,16 @@
 # environmental variable CONDA_PREFIX.
 
 # Set up libraries and includes
-LIBS = -L$(CONDA_PREFIX)/lib -lemosR64 -lemos -lfftw3 \
+LIBS = -L$(CONDA_PREFIX)/lib \
+       -lemosR64 -lemos -lfftw3 \
        -lhdfeos -lGctp \
        -leccodes_f90 -leccodes \
-       -lmfhdf -ldf \
+       -lmfhdf -lmfhdf_fortran -lmfhdf_fcstub -lhdf \
        -lnetcdff \
        -lnetcdf \
        -lrttov13_coef_io -lrttov13_emis_atlas -lrttov13_hdf \
        -lrttov13_parallel -lrttov13_main -lrttov13_other \
-       -lhdf5 -lhdf5_fortran -lhdf5_hl -lhdf5hl_fortran \
+       -lhdf5 -lhdf5_fortran -lhdf5_hl -lhdf5_hl_fortran \
        -lsz \
        -ljpeg -lm -lz -lstdc++ -lblas -llapack
 
