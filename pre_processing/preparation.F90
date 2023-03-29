@@ -120,13 +120,13 @@ subroutine preparation(paths, granule, opts, global_atts, orbit_number, &
       write(*,*) 'chour: ',                 trim(granule%chour)
       write(*,*) 'cminute: ',               trim(granule%cminute)
       write(*,*) 'orbit_number: ',          trim(orbit_number)
-      write(*,*) 'nwp_path(1): ',         trim(opts%nwp_fnames%nwp_path(1))
-      write(*,*) 'nwp_path2(1): ',        trim(opts%nwp_fnames%nwp_path2(1))
-      write(*,*) 'nwp_path3(1): ',        trim(opts%nwp_fnames%nwp_path3(1))
-      write(*,*) 'nwp_path(2): ',         trim(opts%nwp_fnames%nwp_path(2))
-      write(*,*) 'nwp_path2(2): ',        trim(opts%nwp_fnames%nwp_path2(2))
-      write(*,*) 'nwp_path3(2): ',        trim(opts%nwp_fnames%nwp_path3(2))
-      write(*,*) 'nwp_flag: ',            nwp_flag
+      write(*,*) 'nwp_path(1): ',           trim(opts%nwp_fnames%nwp_path(1))
+      write(*,*) 'nwp_path2(1): ',          trim(opts%nwp_fnames%nwp_path2(1))
+      write(*,*) 'nwp_path3(1): ',          trim(opts%nwp_fnames%nwp_path3(1))
+      write(*,*) 'nwp_path(2): ',           trim(opts%nwp_fnames%nwp_path(2))
+      write(*,*) 'nwp_path2(2): ',          trim(opts%nwp_fnames%nwp_path2(2))
+      write(*,*) 'nwp_path3(2): ',          trim(opts%nwp_fnames%nwp_path3(2))
+      write(*,*) 'nwp_flag: ',              nwp_flag
       write(*,*) 'ecmwf_time_int_method: ', opts%ecmwf_time_int_method
       write(*,*) 'i_chunk: ',               i_chunk
       write(*,*) 'assume_full_path: ',      assume_full_path

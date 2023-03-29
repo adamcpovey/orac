@@ -371,6 +371,8 @@ subroutine get_camel_emissivity(cyear, cmonth, camel_emis_path, imager_flags, &
    where(emis%emissivity .le. 0.0) emis%emissivity = 0.999
 
    ! Now interpolate this data onto the data grid
+   ! NOTE: This is only used to populate mixed ch surf reflectance.
+   !       Though written to preproc files, it isn't read in.
    do j = 1, imager_geolocation%ny
       do i = imager_geolocation%startx, imager_geolocation%endx
          if (imager_flags%lsflag(i,j) .eq. 1 .and. &

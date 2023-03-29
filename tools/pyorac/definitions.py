@@ -605,16 +605,23 @@ class ParticleType:
         from glob import glob
         from os.path import join
 
+        # Determine SAD file name
+        file_name = self.sad_filename(inst)
+
         try:
             for fdr in sad_dirs:
+#                if "AVHRR" in inst.sensor:
+#                    fdr_name = join(fdr, inst.sensor.lower() + "-" +
+#                                    inst.noaa + "_" + self.sad)
+#                else:
+#                    # Folder structure on JASMIN
+#                    fdr_name = join(fdr, inst.sensor.lower() + "_" + self.sad)
+#
                 # Folder structure on local
                 fdr_name = join(fdr, inst.sensor.lower(),
                                 inst.platform.upper(), self.sad)
                 if not rayleigh:
                     fdr_name += "_no_ray"
-
-                # Determine SAD file name
-                file_name = self.sad_filename(inst)
 
                 # SAD files stored in subdirectories
                 if glob(join(fdr_name, file_name)):
@@ -624,11 +631,12 @@ class ParticleType:
                 if glob(join(fdr, file_name)):
                     return fdr
 
-            raise FileMissing("Sad Files", str(sad_dirs))
         except FileMissing:
             # If _no_ray is missing, try to find the normal table
             if not rayleigh:
                 return self.sad_dir(sad_dirs, inst)
+
+        raise FileMissing("Sad Files", str(list(sad_dirs) + [file_name]))
 
 
 # Using non-imager LUTs and Baum properties at Greg's recommendation
@@ -636,9 +644,23 @@ SETTINGS = {'WAT': ParticleType("WAT", sad="WAT"),
             'ICE': ParticleType("ICE", sad="ICE_baum")}
 
 # Uncomment to use new netcdf LUTs
-#SETTINGS = {'WAT': ParticleType("liquid-water", sad='netcdf'),
-#            'ICE': ParticleType("water-ice", sad='netcdf', microphysical_model='agg')}
+for ver in range(7, 12):
+    SETTINGS[f"WAT{ver:02d}"] = ParticleType(
+        'liquid-water', atmospheric_model='01', microphysical_model='old',
+        version=f"{ver:02d}", sad='netcdf'
+    )
+    SETTINGS[f"ICE{ver:02d}"] = ParticleType(
+        'water-ice', atmospheric_model='01', microphysical_model='ghm',
+        version=f"{ver:02d}", sad='netcdf'
+    )
+    for typ in (70, 75, 76, 77, 79):
+        SETTINGS[f"A{typ:02d}{ver:02d}"] = ParticleType(
+            'aerosol', atmospheric_model='01', microphysical_model=f"a{typ:02d}",
+            version=f"{ver:02d}", sad='netcdf'
+        )
 
+SETTINGS["liquid-water"] = SETTINGS["WAT11"]
+SETTINGS["water-ice"] = SETTINGS["ICE11"]
 
 tau = Invpar('ITau', ap=-1.0, sx=1.5)
 SETTINGS['A70'] = ParticleType("A70", inv=(tau, Invpar('IRe', ap=0.0856, sx=0.15)))

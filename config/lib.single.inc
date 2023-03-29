@@ -2,7 +2,7 @@
 # environmental variable ORAC_LIBBASE
 
 # Set up libraries and includes
-LIBS = -L$(ORAC_LIBBASE)/lib -L$(ORAC_LIBBASE_FORTRAN)/lib \
+LIBS = -L$(ORAC_LIBBASE)/lib \
        -Wl,-rpath-link=$(ORAC_LIBBASE)/lib \
        -lemosR64 -lemos -lfftw3 \
        -lhdfeos -lGctp \
@@ -17,8 +17,9 @@ LIBS = -L$(ORAC_LIBBASE)/lib -L$(ORAC_LIBBASE_FORTRAN)/lib \
        -ljpeg -lm -lz -lstdc++ -lblas -llapack
 
 INC = -I./ \
-      -I$(ORAC_LIBBASE)/include -I$(ORAC_LIBBASE_FORTRAN)/include \
-      -I$(ORAC_LIBBASE)/include/shared -I$(ORAC_LIBBASE)/mod
+      -I$(ORAC_LIBBASE)/include \
+      -I$(ORAC_LIBBASE)/include/shared \
+      -I$(ORAC_LIBBASE)/mod
 
 CINC = -I./ \
        -I$(ORAC_LIBBASE)/include
@@ -40,8 +41,8 @@ LIBS += -lnr
 INC  += -DINCLUDE_NR
 
 # Uncomment if Fu_Liou support is desired for broadband fluxes.
-#LIBS += -lEd3Fu_201212
-#INC  += -DINCLUDE_FU_LIOU_SUPPORT
+LIBS += -lEd3Fu_201212
+INC  += -DINCLUDE_FU_LIOU_SUPPORT
 
 # Uncomment if Himawari support is desired.
 LIBS += -lhimawari_util
