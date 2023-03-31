@@ -358,7 +358,7 @@ class FileName:
         if mat:
             self.l1b = os.path.join(filename, "geodetic_in.nc")
             self.sensor = 'SLSTR'
-            self.platform = 'Sentinel3' + mat.group('platform').lower()
+            self.platform = 'Sentinel-3' + mat.group('platform').lower()
             self.inst = 'SLSTR-Sentinel-3' + mat.group('platform').lower()
             self.dur = datetime.timedelta(seconds=int(mat.group('duration')))
             self.geo = os.path.join(filename, "geodetic_in.nc")
@@ -472,7 +472,7 @@ class FileName:
                              "for ORAC filenames. Please specify " + terms[-2])
 
         parts = [
-            self.sensor, processor, self.platform,
+            self.sensor, processor, self.platform.replace("Sentinel-3", "Sentinel3"),
             self.time.strftime('%Y%m%d%H%M'), "R{}".format(revision)
         ]
         if self.orbit_num:
@@ -593,6 +593,10 @@ class ParticleType:
                     platform_name = 'meteosat-10'
                 if platform_name == 'msg4':
                     platform_name = 'meteosat-11'
+            elif sensor_name == 'avhrr':
+                sensor_name += '1'
+                if platform_name.startswith("noaa"):
+                    platform_name = "noaa-" + platform_name[4:]
             file_name = '_'.join((platform_name,
                                   sensor_name,
                                   self.mb,
@@ -612,30 +616,29 @@ class ParticleType:
         # Determine SAD file name
         file_name = self.sad_filename(inst)
 
-        try:
-            for fdr in sad_dirs:
-#                if "AVHRR" in inst.sensor:
-#                    fdr_name = join(fdr, inst.sensor.lower() + "-" +
-#                                    inst.noaa + "_" + self.sad)
-#                else:
-#                    # Folder structure on JASMIN
-#                    fdr_name = join(fdr, inst.sensor.lower() + "_" + self.sad)
-#
-                # Folder structure on local
-                fdr_name = join(fdr, inst.sensor.lower(),
-                                inst.platform.upper(), self.sad)
-                if not rayleigh:
-                    fdr_name += "_no_ray"
+        for fdr in sad_dirs:
+            # if "AVHRR" in inst.sensor:
+            #     fdr_name = join(fdr, inst.sensor.lower() + "-" +
+            #                     inst.noaa + "_" + self.sad)
+            # else:
+            #     # Folder structure on JASMIN
+            #     fdr_name = join(fdr, inst.sensor.lower() + "_" + self.sad)
 
-                # SAD files stored in subdirectories
-                if glob(join(fdr_name, file_name)):
-                    return fdr_name
+            # Folder structure on local
+            fdr_name = join(fdr, inst.sensor.lower(),
+                            inst.platform.upper(), self.sad)
+            if not rayleigh:
+                fdr_name += "_no_ray"
 
-                # All files in one directory
-                if glob(join(fdr, file_name)):
-                    return fdr
+            # SAD files stored in subdirectories
+            if glob(join(fdr_name, file_name)):
+                return fdr_name
 
-        except FileMissing:
+            # All files in one directory
+            if glob(join(fdr, file_name)):
+                return fdr
+
+        else:
             # If _no_ray is missing, try to find the normal table
             if not rayleigh:
                 return self.sad_dir(sad_dirs, inst)
