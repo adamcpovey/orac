@@ -124,7 +124,7 @@ def build_preproc_driver(args):
             try:
                 occci = _date_back_search(
                     args.occci_dir, args.File.time,
-                    '%Y/ESACCI-OC-L3S-IOP-MERGED-1M_MONTHLY'
+                    'ESACCI-OC-L3S-IOP-MERGED-1M_MONTHLY'
                     f'_4km_GEO_PML_OCx_QAA-%Y%m-fv{oc_version:.1f}.nc',
                     'years'
                 )

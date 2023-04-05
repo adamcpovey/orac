@@ -42,7 +42,9 @@ subroutine Dealloc_Ctrl(Ctrl)
    deallocate(Ctrl%Ind%WvlIdx)
    deallocate(Ctrl%Ind%ICh)
    if (associated(Ctrl%Ind%YMixed)) deallocate(Ctrl%Ind%YMixed)
+#ifndef __INTEL_COMPILER
    deallocate(Ctrl%Ind%channel_proc_flag)
+#endif
 
    if (associated(Ctrl%RS%B)) deallocate(Ctrl%RS%B)
    if (associated(Ctrl%RS%Sb)) deallocate(Ctrl%RS%Sb)
