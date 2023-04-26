@@ -287,7 +287,9 @@ class OracLut(object):
         )
 
         if np.any(self.solar):
+            # Have to invert the relative azimuth axis
             rbd, rfbd, axes, spacing = self._stack_orac_text_lut_pair("RBD")
+            axes[1] = 180. - axes[1]
             self.r_0v = RearrangedRegularGridInterpolator(
                 [self.channels] + axes, rbd, method, (5, 4, 0, 2, 1, 3)
             )
@@ -303,6 +305,7 @@ class OracLut(object):
             )
 
             tbd, tfbd, axes, _ = self._stack_orac_text_lut_pair("TBD")
+            axes[1] = 180. - axes[1]
             self.t_0d = RearrangedRegularGridInterpolator(
                 [self.channels, axes[0], axes[2], axes[4]], tfbd, method, (3, 2, 0, 1)
             )
