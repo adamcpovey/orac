@@ -209,16 +209,12 @@ class SPixel(object):
         relazi = preproc["geo/relazi",preproc.view,y,x]
         land = preproc["lsf/lsflag",y,x] == 1
         ym = preproc["msi/msi_data",:,y,x]
+        sy = preproc["msi/sd_data",:,y,x]
         rs = preproc["alb/alb_data",:,y,x]
         rho_0v = preproc["alb/rho_0v_data",:,y,x]
         rho_0d = preproc["alb/rho_0d_data",:,y,x]
         rho_dv = preproc["alb/rho_dv_data",:,y,x]
         rho_dd = preproc["alb/rho_dd_data",:,y,x]
-
-        try:
-            sy = preproc["msi/sd_data",:,y,x]
-        except KeyError:
-            sy = None
 
         # Determine interpolation coefficients for RTM fields
         try:
