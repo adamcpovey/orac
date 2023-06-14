@@ -523,7 +523,7 @@ def _orac_ch_num_to_sensor_ch_num(sensor, chan_num):
 
 
 def _sensor_ch_num_to_orac_ch_num(sensor, chan_num):
-    """Convert sensor channel number in an ORAC channel number"""
+    """Convert sensor channel number into an ORAC channel number"""
 
     # AVHRR has some bespoke channel numbers
     if chan_num == "Ch3a":

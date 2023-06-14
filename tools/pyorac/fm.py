@@ -40,6 +40,7 @@ To Do:
 import numpy as np
 import os.path
 
+from abc import ABC, abstractmethod
 from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
 
@@ -200,6 +201,7 @@ class SPixel(object):
         x and y are the Fortran way around. Skips uncertainty calculations.
         """
         from cftime import datetime
+        from pyorac.util import bilinear_coefficients
 
         time = datetime.fromordinal(preproc["msi/time_data"][y,x], "standard")
         lat = preproc["loc/lat",y,x]
@@ -386,6 +388,8 @@ class SPixel(object):
         return tsf
 
     def interp_in_pressure(self, pressure, *args):
+        from pyorac.util import bound_grid
+
         i0, i1, delta = bound_grid(self.pressure, pressure)
         for name in args:
             value = getattr(self, name)
