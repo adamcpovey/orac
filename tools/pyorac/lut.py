@@ -484,6 +484,63 @@ class OracTextLut(OracLutBase):
               dsat * self.e_md.values[ch,:,isat-1].T),
     )
 
+    def uncertainty(self, pixel, alwaysthermal=False, cloudtype=0, maxsolzen=75.):
+        """Calculate measurement variance for a pixel the old way
+
+        Args:
+        pixel: SPixel instance to evaluate
+        alwaysthermal: Include therm homog/coreg errors during the day
+        cloudtype: Int[0-4] specifying cloud structure model to use; None skips
+        maxsolzen: Solar zenith beyond which pixel is considered twilight
+        """
+        from datetime import datetime
+
+        date_into_year = pixel.time - datetime(pixel.time.year-1, 12, 31)
+        sol_const = self.solar_constant(date_into_year.days)
+
+        out = []
+        for ch in pixel.iter_channels():
+            # Map this channel onto the LUT
+            i = np.argmax(ch["channel"] == pixel.channels)
+            j = np.argmax(ch["channel"] == self.channels[self.solar])
+            k = np.argmax(ch["channel"] == self.channels[self.thermal])
+
+            day = pixel.solzen[i] < maxsolzen
+
+            # Measurement uncertainty
+            if ch["sy"] > 0.:
+                sy = ch["sy"]
+            elif ch["thermal"]:
+                sy = self.nebt[k]**2
+            else:
+                sy = self.nedr[j]**2
+
+            if cloudtype is not None:
+                # Homog uncertainty
+                if ch["thermal"] and (alwaysthermal or ch["solar"] or not day):
+                    sy += self.ir_nehomog[k,cloudtype]**2
+                if ch["solar"] and day:
+                    if ch["thermal"]:
+                        _, dr_dtm = self.temp2rad(ch["meas"])
+                        radiance = sol_const[j] / dr_dtm[k]
+                    else:
+                        radiance = ch["meas"]
+                    sy += (self.vis_nehomog[j,cloudtype] * radiance)**2
+
+                # Coreg uncertainty
+                if ch["thermal"] and (alwaysthermal or ch["solar"] or not day):
+                    sy += self.ir_necoreg[k,cloudtype]**2
+                if ch["solar"] and day:
+                    if ch["thermal"]:
+                        # _, dr_dtm = self.temp2rad(ch["meas"])
+                        radiance = sol_const[j] / dr_dtm[k]
+                    else:
+                        radiance = ch["meas"]
+                    sy += (self.vis_necoreg[j,cloudtype] * radiance)**2
+            out.append(sy)
+
+        return np.array(out)
+
 
 class OracNcdfLut(OracLutBase):
     def __init__(self, filename, method='cubic', check_consistency=False):
@@ -568,13 +625,16 @@ class OracNcdfLut(OracLutBase):
                 # Solar constant
                 self.f0 = lut_file["F0"][:]
                 self.f1 = None
+                # Uncertainty model
+                try:
+                    self.snr = lut_file["snr"][:]
+                    self.ru2 = None
+                except (KeyError, IndexError):
+                    self.snr = None
+                    self.ru2 = np.stack([lut_file["ru"+l][:]**2 for l in "abc"])
             else:
-                self.r_0v = None
-                self.r_0d = None
-                self.t_0d = None
-                self.t_00 = None
-                self.f0 = None
-                self.f1 = None
+                (self.r_0v, self.r_0d, self.t_0d, self.t_00, self.f0, self.f1,
+                 self.snr, self.ru2) = [None] * 8
 
             # Thermal channels
             if np.any(self.thermal):
@@ -590,12 +650,12 @@ class OracNcdfLut(OracLutBase):
                 self.b2 = lut_file["B2"][:]
                 self.t1 = lut_file["T1"][:]
                 self.t2 = lut_file["T2"][:]
+                # Uncertainty model
+                self.t0 = lut_file["refbt"][:]
+                self.nedt = lut_file["nedt"][:]
             else:
-                self.e_md = None
-                self.b1 = None
-                self.b2 = None
-                self.t1 = None
-                self.t2 = None
+                (self.e_md, self.b1, self.b2, self.t1, self.t2,
+                 self.t0, self.nedf) = [None] * 7
 
     def state_space(self, channels, satzen, solzen, relazi):
         """Interpolate angles, returning depth/radius sheets
@@ -683,6 +743,78 @@ class OracNcdfLut(OracLutBase):
                 out[key] = np.moveaxis(val, 0, 1)
 
         return out
+
+    def uncertainty(self, pixel, gain, alwaysthermal=False, maxsolzen=75.,
+                    thermal_nehomog=0.50, solar_nehomog=0.01,
+                    thermal_necoreg=0.15, solar_necoreg=0.02):
+        """Calculate measurement variance for a pixel the old way
+
+        Args:
+        pixel: SPixel instance to evaluate
+        gain: Gain for visible channels (e.g. pre["msi/cal_data"])
+        alwaysthermal: Include therm homog/coreg errors during the day
+        maxsolzen: Solar zenith beyond which pixel is considered twilight
+        thermal_nehomog: homog error for thermal chs; default 0.50 K
+        solar_nehomog: homog error for solar chs; default 0.01
+        thermal_necoreg: coreg error for thermal chs; default 0.15 K
+        solar_necoreg: coreg error for solar chs; default 0.02
+        """
+        from datetime import datetime
+
+        date_into_year = pixel.time - datetime(pixel.time.year-1, 12, 31)
+        sol_const = self.solar_constant(date_into_year.days)
+        _, dr_dt0 = self.temp2rad(self.t0)
+
+        out = []
+        for ch in pixel.iter_channels():
+            i = np.argmax(ch["channel"] == pixel.channels)
+            j = np.argmax(ch["channel"] == self.channels[self.solar])
+            k = np.argmax(ch["channel"] == self.channels[self.thermal])
+
+            day = pixel.solzen[i] < maxsolzen
+
+            # Measurement uncertainty
+            if ch["thermal"]:
+                # Scale uncertainty with local gradients of Planck function
+                _, dr_dtm = self.temp2rad(ch["meas"])
+                sy = (self.nedt[k] * dr_dt0[k] / dr_dtm[k])**2
+            else:
+                # Convert reflectance to radiance
+                fac = np.cos(np.radians(pixel.solzen[ch["index"]])) * sol_const[j] / np.pi
+                if self.snr is not None:
+                    # Combine SNR and counting error
+                    dLx2 = (ch["meas"] * fac / self.snr[j])**2 + gain[j]**2 / 6.
+                else:
+                    # Polynomial error model
+                    dLx2 = 0.
+                    for term in self.ru2:
+                        dLx2 *= ch["meas"] * fac
+                        dLx2 += term[j]
+                sy = dLx2 / fac**2
+
+            # Homog uncertainty
+            if ch["thermal"] and (alwaysthermal or ch["solar"] or not day):
+                sy += thermal_nehomog**2
+            if ch["solar"] and day:
+                if ch["thermal"]:
+                    # _, dr_dtm = self.temp2rad(ch["meas"])
+                    radiance = sol_const[j] / dr_dtm[k]
+                else:
+                    radiance = ch["meas"]
+                sy += (solar_nehomog * radiance)**2
+            # Coreg uncertainy
+            if ch["thermal"] and (alwaysthermal or ch["solar"] or not day):
+                sy += thermal_necoreg**2
+            if ch["solar"] and day:
+                if ch["thermal"]:
+                    # _, dr_dtm = self.temp2rad(ch["meas"])
+                    radiance = sol_const[j] / dr_dtm[k]
+                else:
+                    radiance = ch["meas"]
+                sy += (solar_necoreg * radiance)**2
+            out.append(sy)
+
+        return np.array(out)
 
 
 def _orac_ch_num_to_sensor_ch_num(sensor, chan_num):
