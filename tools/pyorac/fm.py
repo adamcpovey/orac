@@ -493,17 +493,17 @@ class OracForwardModel(ABC):
     def set_state(self, **kwargs):
         """Change the value of one or more state vector elements"""
 
-    def reflectance(self):
-        """Modelled reflectance at top-of-atmosphere"""
-        return (self.coverage * self.overcast_reflectance() +
-                (1. - self.coverage) * self.clear_reflectance())
+    def _total_r(self):
+        """Modelled R at top-of-atmosphere"""
+        return (self.coverage * self._overcast_r() +
+                (1. - self.coverage) * self._clear_r())
 
     @abstractmethod
-    def overcast_reflectance(self):
+    def _overcast_r(self):
         """Modelled reflectance due to particulates at top-of-atmosphere"""
 
     @abstractmethod
-    def clear_reflectance(self):
+    def _clear_r(self):
         """Modelled reflectance at top of a clean atmosphere"""
 
     def __str__(self):
@@ -653,11 +653,14 @@ class SolarForwardModel(OracForwardModel):
         upper.description += " upper layer"
         return upper
 
-    def overcast_reflectance(self):
+    def _overcast_r(self):
         return self.tac_0 * self.tac_v * (self.r_0v + self.d())
 
-    def clear_reflectance(self):
+    def _clear_r(self):
         return self.pixel.rs * self.tsf_0 * self.tsf_v
+
+    def reflectance(self):
+        return self._total_r()
 
     @property
     def tac_0(self):
@@ -881,15 +884,18 @@ class ThermalForwardModel(OracForwardModel):
     def delta_ts(self):
         return self.surface_temperature - self.pixel.temperature[-1]
 
-    def overcast_reflectance(self):
+    def _overcast_r(self):
         return self.rac_up + self.tac * (
             self.rbc_up * self.t_dv + self.b_cloud * self.e_md +
             self.rac_down * self.r_dv
         )
 
-    def clear_reflectance(self):
+    def _clear_r(self):
         return (self.pixel.rbc_up[0] +
                 self.delta_ts * self.es_db_dts * self.pixel.tac_lw[-1])
+
+    def radiance(self):
+        return self._total_r()
 
     def brightness_temperature(self):
         bt, _ = self.rad2temp(self.reflectance())
