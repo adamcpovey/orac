@@ -176,15 +176,21 @@ class PreprocessorFiles(object):
         with self.dataset(self.SUFFIXES[0]) as fobj:
             return fobj["msi_ch_view"][:] - 1
 
+    @property
+    def date(self):
+        from dateutil.parser import parse
+        return parse(self.attribute("Date_Created"))
+
 
 class SPixel(object):
     def __init__(self, *args):
         """Fundamental constructor that isn't intended for use"""
-        (self.lat, self.lon, self.solzen, self.satzen, self.relazi, self.land,
+        self.time, self.lat, self.lon = args[:3]
+        (self.solzen, self.satzen, self.relazi, self.land,
          self.channels, self.solar, self.thermal, self.ym, self.sy, self.rs, self.rho_0v,
          self.rho_0d, self.rho_dv, self.rho_dd, self.pressure, self.temperature,
          self.geopotential, self.emissivity, self.tac_lw, self.tbc_lw, self.rac_up,
-         self.rac_down, self.rbc_up, self.tac_sw, self.tbc_sw) = map(np.asarray, args)
+         self.rac_down, self.rbc_up, self.tac_sw, self.tbc_sw) = map(np.asarray, args[3:])
 
     @staticmethod
     def from_preproc(preproc, x, y, spixel_y_to_ctrl_y_index=None):
@@ -193,7 +199,9 @@ class SPixel(object):
         Largely follows src/get_spixel.F90 and its subroutines, such that
         x and y are the Fortran way around. Skips uncertainty calculations.
         """
+        from cftime import datetime
 
+        time = datetime.fromordinal(preproc["msi/time_data"][y,x], "standard")
         lat = preproc["loc/lat",y,x]
         lon = preproc["loc/lon",y,x]
         solzen = preproc["geo/solzen",preproc.view,y,x]
@@ -247,7 +255,7 @@ class SPixel(object):
             tac_sw, tbc_sw = [None] * 2
 
         return SPixel(
-            lat, lon, solzen, satzen, relazi, land, preproc.channel_ids,
+            time, lat, lon, solzen, satzen, relazi, land, preproc.channel_ids,
             preproc.solar, preproc.thermal,
             ym, sy, rs, rho_0v, rho_0d, rho_dv, rho_dd, pre, temp, geo,
             emis, tac_lw, tbc_lw, rac_up, rac_down, rbc_up, tac_sw, tbc_sw
@@ -270,7 +278,7 @@ class SPixel(object):
         vis = ch[self.solar]
         ir = ch[self.thermal]
         return SPixel(
-            self.lat, self.lon, self.solzen[ch], self.satzen[ch], self.relazi[ch],
+            self.time, self.lat, self.lon, self.solzen[ch], self.satzen[ch], self.relazi[ch],
             self.land, self.channels[ch], self.solar[ch], self.thermal[ch],
             self.ym[ch], self.sy[ch], self.rs[vis], self.rho_0v[vis], self.rho_0d[vis],
             self.rho_dv[vis], self.rho_dd[vis], self.pressure, self.temperature, self.geopotential,
@@ -284,7 +292,7 @@ class SPixel(object):
         # Fields needed by the thermal model are nan so errors to ensure errors
         # are thrown down the line if you use this in error
         return SPixel(
-            self.lat, self.lon, self.solzen, self.satzen, self.relazi,
+            self.time, self.lat, self.lon, self.solzen, self.satzen, self.relazi,
             self.land, self.channels, vis, ir, self.ym, self.sy,
             self.rs, self.rho_0v, self.rho_0d,
             self.rho_dv, self.rho_dd, self.pressure, self.temperature, self.geopotential,
@@ -647,8 +655,8 @@ class SolarForwardModel(OracForwardModel):
     def e_dd(self):
         raise NotImplementedError
 
-    def solar_constant(self, doy):
-        return self._lut.solar_constant(doy)[self.lut_ind]
+    def solar_constant(self):
+        return self._lut.solar_constant(self.pixel.time._dayofyr)[self.lut_ind]
 
 class SolarBrdfBase(SolarForwardModel):
     def a(self):
