@@ -479,18 +479,18 @@ class OracForwardModel(ABC):
         self._set_lut_terms(lut, kwargs.pop("optical_depth", tau_prior),
                             kwargs.pop("effective_radius", re_prior))
         self._set_top_pressure(kwargs.pop("top_pressure", p_prior))
-        self.change_state(**kwargs)
+        self.set_state(**kwargs)
 
     @abstractmethod
     def _set_top_pressure(self, top_pressure):
         """Interpolate the transmission/reflectance profiles to the layer pressure"""
 
     @abstractmethod
-    def _set_lut_terms(self, optical_depth, effective_radius):
+    def _set_lut_terms(self, lut, optical_depth, effective_radius):
         """Interpolate all look-up tables to given tau and r_eff"""
 
     @abstractmethod
-    def change_state(self, **kwargs):
+    def set_state(self, **kwargs):
         """Change the value of one or more state vector elements"""
 
     def reflectance(self):
@@ -509,6 +509,7 @@ class OracForwardModel(ABC):
     def __str__(self):
         return (f"{self.description} forward model\n"
                 f"{self.pixel.channels:}")
+
 
 class SolarForwardModel(OracForwardModel):
     """Abstract class for implementation of the solar ORAC forward model
@@ -536,7 +537,7 @@ class SolarForwardModel(OracForwardModel):
 
         super().__init__(spixel, lut, **kwargs)
 
-    def change_state(self, **kwargs):
+    def set_state(self, **kwargs):
         """Copy this model, changing the specified keywords"""
         if "coverage" in kwargs:
             self.coverage = kwargs.pop("coverage")
@@ -580,10 +581,18 @@ class SolarForwardModel(OracForwardModel):
     def _set_lut_terms(self, lut, optical_depth, effective_radius):
         """Interpolate look-up tables"""
         # This will silently allow unavailable channels to be requested
-        self.__dict__.update(lut(
-            self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-            self.pixel.relazi, optical_depth, effective_radius
-        ))
+        if optical_depth is None and effective_radius is None:
+            # Return 2D array
+            self.__dict__.update(lut.state_space(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi
+            ))
+        else:
+            # Return point
+            self.__dict__.update(lut(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi, optical_depth, effective_radius
+            ))
         self._lut = lut
         self.lut_ind = [np.argmax(lut.channels[lut.solar] == ch) for ch in self.pixel.channels]
         self.optical_depth = optical_depth
@@ -821,7 +830,7 @@ class ThermalForwardModel(OracForwardModel):
 
         super().__init__(spixel, lut, **kwargs)
 
-    def change_state(self, **kwargs):
+    def set_state(self, **kwargs):
         if "coverage" in kwargs:
             self.coverage = kwargs.pop("coverage")
         if "surface_temperature" in kwargs:
@@ -853,10 +862,16 @@ class ThermalForwardModel(OracForwardModel):
     def _set_lut_terms(self, lut, optical_depth, effective_radius):
         """Interpolate look-up tables"""
         # This will silently allow unavailable channels through
-        self.__dict__.update(lut(
-            self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-            self.pixel.relazi, optical_depth, effective_radius
-        ))
+        if optical_depth is None and effective_radius is None:
+            self.__dict__.update(lut.state_space(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi
+            ))
+        else:
+            self.__dict__.update(lut(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi, optical_depth, effective_radius
+            ))
         self._lut = lut
         self.lut_ind = [np.argmax(lut.channels[lut.thermal] == ch) for ch in self.pixel.channels]
         self.optical_depth = optical_depth
