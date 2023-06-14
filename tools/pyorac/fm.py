@@ -898,8 +898,13 @@ class ThermalForwardModel(OracForwardModel):
         return self._total_r()
 
     def brightness_temperature(self):
-        bt, _ = self.rad2temp(self.reflectance())
-        return bt
+        try:
+            bt, _ = self.rad2temp(self._total_r())
+            return bt
+        except ValueError:
+            return np.apply_along_axis(
+                lambda r: self.rad2temp(r)[0], 2, self._total_r()
+            )
 
     def this_below(self, lut, **kwargs):
         self.description += " lower layer"
