@@ -456,23 +456,28 @@ class OracForwardModel(ABC):
         self.pixel = spixel
         self.nch = self.pixel.channels.size
 
-        # Fetch priors from lut
-        if lut._particle.name in ("WAT", "liquid-water"):
+        if lut._particle is not None:
+            # Fetch priors from lut
+            if lut._particle.name in ("WAT", "liquid-water"):
+                p_prior = 900.
+                tau_prior = 0.8
+                re_prior = 12.
+            elif lut._particle.name in ("ICE", "water-ice"):
+                p_prior = 400.
+                tau_prior = 0.8
+                re_prior = 30.
+            else:
+                # Aerosols define their own priors
+                p_prior = 500. # Value unimportant
+                for parameter in lut._particle.inv:
+                    if parameter.var == 'ITau':
+                        tau_prior = paramter.ap
+                    elif parameter.var == 'IRe':
+                        re_prior = parameter.ap
+        else:
             p_prior = 900.
             tau_prior = 0.8
             re_prior = 12.
-        elif lut._particle.name in ("ICE", "water-ice"):
-            p_prior = 400.
-            tau_prior = 0.8
-            re_prior = 30.
-        else:
-            # Aerosols define their own priors
-            p_prior = 500. # Value unimportant
-            for parameter in lut._particle.inv:
-                if parameter.var == 'ITau':
-                    tau_prior = paramter.ap
-                elif parameter.var == 'IRe':
-                    re_prior = parameter.ap
 
         self.coverage = kwargs.pop("coverage", 1.)
         self.surface_temperature = kwargs.pop("surface_temperature", 300.)
