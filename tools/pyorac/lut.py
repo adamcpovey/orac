@@ -34,6 +34,7 @@ To Do:
 import numpy as np
 import os.path
 
+from abc import ABC, abstractmethod
 from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
 
@@ -55,7 +56,7 @@ class RearrangedRegularGridInterpolator(RegularGridInterpolator):
         return super().__call__(rearranged_args, *args[1:], **kwargs)
 
 
-class OracLut(object):
+class OracLutBase(ABC):
     """
     Container for reading and interpolating ORAC look-up tables
 
@@ -65,15 +66,12 @@ class OracLut(object):
     for exact replication.
     """
 
-    def __init__(self, filename, method='cubic',
-                 t_dv_from_t_0d=True, check_consistency=False):
+    def __init__(self, filename, check_consistency=False):
         """
         Args:
         filename: name of look-up table to open
 
         Kwargs:
-        method: interpolation method to use. Default cubic.
-        t_dv_from_t_0d: ignore the diffuse-to-view transmission table
         check_consistency: ensure that the number of channels is consistent
             across read operations (mostly important for text tables)
         """
@@ -82,16 +80,6 @@ class OracLut(object):
         self.check = check_consistency
         self._particle = None
         self._inst = None
-
-        if self.filename.endswith("nc"):
-            self._open_ncdf_tables(method)
-            self.chan_labels = None
-        else:
-            self._open_text_chan_files()
-            self._open_text_tables(method)
-
-        if t_dv_from_t_0d:
-            self.t_dv = self.t_0d
 
     @staticmethod
     def from_description(sad_dirs, particle, inst, **kwargs):
@@ -105,91 +93,201 @@ class OracLut(object):
 
         fdr = particle.sad_dir(sad_dirs, inst)
         filename = os.path.join(fdr, particle.sad_filename(inst))
-        self = OracLut(filename, **kwargs)
+        self = type(self)(filename, **kwargs)
         self._particle = particle
         self._inst = inst
         return self
+
+    def solar_constant(self, doy):
+        if self.f1 is not None:
+            # Old approximation for F0 variation throughout the year
+            return self.f0 + self.f1 * np.cos(2. * np.pi * doy / 365.)
+
+        # New (better) approximation
+        return self.f0 / (1. - 0.0167086 * np.cos((2.* np.pi * (doy - 4.)) /
+                                                  365.256363))**2
+
+    def rad2temp(self, radiance, sl=slice(None)):
+        """Convert radiance into brightness temperature"""
+
+        c = np.log(self.b1[sl] / radiance + 1.)
+        t_eff = self.b2[sl] / c
+        t = (t_eff - self.t1[sl]) / self.t2[sl]
+
+        dt_dr = self.b1[sl] * self.b2[sl] / (self.t2[sl] * c * c * radiance * (radiance + self.b1[sl]))
+
+        return t, dt_dr
+
+    def temp2rad(self, temperature, sl=slice(None)):
+        """Convert brightness temperature into radiance"""
+
+        t_eff = temperature * self.t2[sl] + self.t1[sl]
+        bb = self.b2[sl] / t_eff
+        c = np.exp(bb)
+        denom = c - 1.
+        r = self.b1[sl] / denom
+
+        dr_dt = self.b1[sl] * bb * c * self.t2[sl] / (t_eff * denom * denom)
+
+        return r, dr_dt
+
+    def __call__(self, channels, satzen, solzen, relazi, tau, re):
+        """Deal with different dimension order/manner in types of LUT"""
+        if self.satellite_zenith_spacing.endswith("logarithmic"):
+            satzen = np.log10(satzen)
+        if self.solar_zenith_spacing.endswith("logarithmic"):
+            solzen = np.log10(solzen)
+        if self.relative_azimuth_spacing.endswith("logarithmic"):
+            relazi = np.log10(relazi)
+        if self.optical_depth_spacing.endswith("logarithmic"):
+            tau = np.log10(tau)
+        if self.effective_radius_spacing.endswith("logarithmic"):
+            re = np.log10(re)
+
+        # Only output sets that apply to every requested channel
+        solar = True
+        thermal = True
+        for requested_ch in channels:
+            for available_ch, is_solar, is_thermal in zip(self.channels, self.solar, self.thermal):
+                if requested_ch == available_ch:
+                    solar &= is_solar
+                    thermal &= is_thermal
+                    break
+            else:
+                raise ValueError(f"Requested unavailable channel: {requested_ch}")
+
+        out = dict(
+            t_dv=self.t_dv((satzen, tau, re, channels)),
+            t_dd=self.t_dd((tau, re, channels)),
+            r_dv=self.r_dv((satzen, tau, re, channels)),
+            r_dd=self.r_dd((tau, re, channels)),
+            ext=self.ext((re, channels)),
+            ext_ratio=self.ext_ratio((re, channels)),
+        )
+        if solar:
+            out["r_0v"] = self.r_0v((relazi, satzen, solzen, tau, re, channels))
+            out["r_0d"] = self.r_0d((solzen, tau, re, channels))
+            out["t_0d"] = self.t_0d((solzen, tau, re, channels))
+            out["t_00"] = self.t_00((solzen, tau, re, channels))
+            # Use satzen on solzen axis (which assumes its in bounds)
+            out["t_vd"] = self.t_0d((satzen, tau, re, channels))
+            out["t_vv"] = self.t_00((satzen, tau, re, channels))
+        if thermal:
+            out["e_md"] = self.e_md((satzen, tau, re, channels))
+
+        return out
+
+    @abstractmethod
+    def state_space(self, channels, satzen, solzen, relazi):
+        """Interpolate angles, returning depth/radius sheets
+
+        This is a linear interpolation as done within the Fortran."""
+
+
+class OracTextLut(OracLutBase):
+    def __init__(self, filename, method='cubic', check_consistency=False,
+                 t_dv_from_t_0d=True):
+        """
+        Args:
+        filename: name of look-up table to open
+
+        Kwargs:
+        method: interpolation method to use. Default cubic.
+        t_dv_from_t_0d: ignore the diffuse-to-view transmission table
+        check_consistency: ensure that the number of channels is consistent
+            across read operations (mostly important for text tables)
+        """
+        super(OracTextLut, self).__init__(filename, check_consistency)
+
+        try:
+            self._open_text_chan_files()
+        except UnboundLocalError:
+            raise ValueError("Unable to find tables from "+filename)
+        self._open_text_tables(method)
+
+        self.t_dv_from_t_0d = t_dv_from_t_0d
+
+    def __call__(self, *args):
+        if self.t_dv_from_t_0d:
+            tmp = self.t_dv
+            self.t_dv = self.t_0d
+        try:
+            return super(OracTextLut, self).__call__(*args)
+        finally:
+            if self.t_dv_from_t_0d:
+                self.t_dv = tmp
 
     def _open_text_chan_files(self):
         """Open ORAC channel descriptions for a set of channels"""
         import re
         from glob import iglob
 
-        regex = re.compile("(Ch[0-9ab]+)\.sad")
-        self.chan_labels = [regex.search(f).group(1) for f in iglob(self.filename)]
-        self.nch = len(self.chan_labels)
-        self.channels = np.empty(self.nch, dtype=int)
-        self.solar = np.zeros(self.nch, dtype=bool)
-        self.thermal = np.zeros(self.nch, dtype=bool)
-        f0 = []
-        f1 = []
-        b1 = []
-        b2 = []
-        t1 = []
-        t2 = []
-
+        # Work out what files are available and their channel numbers
         fdr, root = os.path.split(self.filename)
         parts = os.path.basename(root).split("_")
-        ch_filename = os.path.join(fdr, parts[0]+"_"+parts[-1])
-        for i, label in enumerate(self.chan_labels):
-            lut_file = ch_filename.replace("Ch*", label)
+        self.sensor = parts[0]
+        ch_filename = os.path.join(fdr, self.sensor+"_"+parts[-1])
+        regex = re.compile("(Ch[0-9ab]+)\.sad")
+        lut_files = []
+        channels = []
+        for a_file in iglob(self.filename):
+            ch_label = regex.search(a_file).group(1)
+            lut_files.append(ch_filename.replace("Ch*", ch_label))
+            channels.append(_sensor_ch_num_to_orac_ch_num(self.sensor, ch_label))
 
-            chan_properties = read_orac_chan_file(lut_file)
-            if self.check and chan_properties["description"] != label:
+        # Sort by channel number
+        channels, lut_files = zip(*sorted(zip(channels, lut_files)))
+
+        properties = dict(channels=channels)
+        for lut_file in lut_files:
+            chan = read_orac_chan_file(lut_file)
+            if self.check and chan_properties["name"] != os.path.basename(lut_file):
                 raise ValueError("Inconsistent LUT: "+lut_file)
 
-            self.channels[i] = _sensor_ch_num_to_orac_ch_num(
-                chan_properties["name"], label
-            )
-            if chan_properties["solar"]:
-                self.solar[i] = True
-                f0.append(chan_properties["vis"]["f01"][0])
-                f1.append(chan_properties["vis"]["f01"][1])
+            # Flatten structure
+            chan.update(chan.pop("vis", {}))
+            chan.update(chan.pop("ir", {}))
 
-            if chan_properties["thermal"]:
-                self.thermal[i] = True
-                b1.append(chan_properties["ir"]["b1"])
-                b2.append(chan_properties["ir"]["b2"])
-                t1.append(chan_properties["ir"]["t1"])
-                t2.append(chan_properties["ir"]["t2"])
+            # Form lists
+            for key, val in chan.items():
+                try:
+                    properties[key].append(val)
+                except KeyError:
+                    properties[key] = [val,]
 
         if self.check:
-            if len(f0) != self.solar.sum():
+            ns = sum(properties["solar"])
+            if ns > 0 and ns != len(properties["f01"]):
                 raise ValueError("Inconstent solar channels: "+self.filename)
-            if len(b1) != self.thermal.sum():
+            nt = sum(properties["thermal"])
+            if nt > 0 and nt != len(properties["b1"]):
                 raise ValueError("Inconsistent thermal channels: "+self.filename)
 
-        if np.any(self.solar):
-            ind = np.argsort(self.channels[self.solar])
-            self.f0 = np.asarray(f0)[ind]
-            self.f1 = np.asarray(f1)[ind]
-        else:
-            self.f0 = None
-            self.f1 = None
+        # Convert to lists to arrays or delete
+        del properties["name"]
+        properties = {k: np.asarray(v) for k, v in properties.items()}
 
-        if np.any(self.thermal):
-            ind = np.argsort(self.channels[self.thermal])
-            self.b1 = np.asarray(b1)[ind]
-            self.b2 = np.asarray(b2)[ind]
-            self.t1 = np.asarray(t1)[ind]
-            self.t2 = np.asarray(t2)[ind]
+        # Reformat the solar constant array
+        if (f01 := properties.pop("f01", None)) is not None:
+            self.f0 = f01[:,0]
+            self.f1 = f01[:,1]
         else:
+            self.f0, self.f1 = [None] * 2
+
+        self.__dict__.update(properties)
+        self.nch = len(self.channels)
+
+        if not np.any(self.thermal):
             self.b1 = None
             self.b2 = None
             self.t1 = None
             self.t2 = None
 
-        ind = np.argsort(self.channels)
-        self.chan_labels = [self.chan_labels[i] for i in ind]
-        self.channels = self.channels[ind]
-        self.solar = self.solar[ind]
-        self.thermal = self.thermal[ind]
-
     def _stack_orac_text_lut(self, code):
         """Open a set of channels from ORAC text look-up tables"""
 
         shape = None
-        for i, label in enumerate(self.chan_labels):
+        for i, label in enumerate(self.file_id):
             lut_file = self.filename.replace("RD", code).replace("Ch*", label)
 
             try:
@@ -223,7 +321,7 @@ class OracLut(object):
         """Open a pair of ORAC tables for a set of channels"""
 
         shape0 = None
-        for i, label in enumerate(self.chan_labels):
+        for i, label in enumerate(self.file_id):
             lut_file = self.filename.replace("RD", code).replace("Ch*", label)
 
             try:
@@ -325,9 +423,82 @@ class OracLut(object):
         else:
             self.e_md = None
 
-    def _open_ncdf_tables(self, method):
-        """Open contents of ORAC netCDF look-up table"""
+    def state_space(self, channels, satzen, solzen, relazi):
+        """Interpolate angles, returning depth/radius sheets
 
+        This is a linear interpolation as done within the Fortran.
+        Arguments are either scalars or 1D arrays of the same length"""
+        if self.satellite_zenith_spacing.endswith("logarithmic"):
+            satzen = np.log10(satzen)
+        if self.solar_zenith_spacing.endswith("logarithmic"):
+            solzen = np.log10(solzen)
+        if self.relative_azimuth_spacing.endswith("logarithmic"):
+            relazi = np.log10(relazi)
+
+        isat = np.digitize(satzen, self.r_0v.grid[4])
+        dsat = ((self.r_0v.grid[4][isat] - satzen) /
+                (self.r_0v.grid[4][isat] - self.r_0v.grid[4][isat-1]))
+        isol = np.digitize(solzen, self.r_0v.grid[3])
+        dsol = ((self.r_0v.grid[3][isol] - solzen) /
+                (self.r_0v.grid[3][isol] - self.r_0v.grid[3][isol-1]))
+        irel = np.digitize(relazi, self.r_0v.grid[2])
+        drel = ((self.r_0v.grid[2][irel] - relazi) /
+                (self.r_0v.grid[2][irel] - self.r_0v.grid[2][irel-1]))
+        isatsol = np.digitize(satzen, self.r_0v.grid[3])
+        dsatsol = ((self.r_0v.grid[3][isatsol] - satzen) /
+                (self.r_0v.grid[3][isatsol] - self.r_0v.grid[3][isatsol-1]))
+
+        ch = [i in channels for i in self.channels]
+
+        return dict(
+            t_dv=(((1-dsatsol) * self.t_0d.values[ch,:,isatsol].T +
+                   dsatsol * self.t_0d.values[ch,:,isatsol-1].T)
+                  if self.t_dv_from_t_0d else
+                  ((1-dsat) * self.t_dv.values[ch,:,isat].T +
+                   dsat * self.t_dv.values[ch,:,isat-1].T)),
+            t_dd=self.t_dd.values[ch].T,
+            r_dv=((1-dsat) * self.r_dv.values[ch,:,isat].T +
+                  dsat * self.r_dv.values[ch,:,isat-1].T),
+            r_dd=self.r_dd.values[ch].T,
+            ext=self.ext.values[ch].T,
+            ext_ratio=self.ext_ratio.values[ch].T,
+            r_0v=(((1-dsat) * (1-dsol) * (1-drel) * self.r_0v.values[ch,:,irel,isol,isat].T +
+                   dsat * (1-dsol) * (1-drel) * self.r_0v.values[ch,:,irel,isol,isat-1].T +
+                   (1-dsat) * dsol * (1-drel) * self.r_0v.values[ch,:,irel,isol-1,isat].T +
+                   dsat * dsol * (1-drel) * self.r_0v.values[ch,:,irel,isol-1,isat-1].T +
+                   (1-dsat) * (1-dsol) * drel * self.r_0v.values[ch,:,irel-1,isol,isat].T +
+                   dsat * (1-dsol) * drel * self.r_0v.values[ch,:,irel-1,isol,isat-1].T +
+                   (1-dsat) * dsol * drel * self.r_0v.values[ch,:,irel-1,isol-1,isat].T +
+                   dsat * dsol * drel * self.r_0v.values[ch,:,irel-1,isol-1,isat-1].T)),
+        r_0d=((1-dsol) * self.r_0d.values[ch,:,isol].T +
+              dsol * self.r_0d.values[ch,:,isol-1].T),
+        t_0d=((1-dsol) * self.t_0d.values[ch,:,isol].T +
+              dsol * self.t_0d.values[ch,:,isol-1].T),
+        t_00=((1-dsol) * self.t_00.values[ch,:,isol].T +
+              dsol * self.t_00.values[ch,:,isol-1].T),
+        t_vd=((1-dsatsol) * self.t_0d.values[ch,:,isatsol].T +
+              dsatsol * self.t_0d.values[ch,:,isatsol-1].T),
+        t_vv=((1-dsatsol) * self.t_00.values[ch,:,isatsol].T +
+              dsatsol * self.t_00.values[ch,:,isatsol-1].T),
+        e_md=((1-dsat) * self.e_md.values[ch,:,isat].T +
+              dsat * self.e_md.values[ch,:,isat-1].T),
+    )
+
+
+class OracNcdfLut(OracLutBase):
+    def __init__(self, filename, method='cubic', check_consistency=False):
+        """
+        Args:
+        filename: name of look-up table to open
+
+        Kwargs:
+        method: interpolation method to use. Default cubic.
+        check_consistency: ensure that the number of channels is consistent
+            across read operations (mostly important for text tables)
+        """
+        super(OracNcdfLut, self).__init__(filename, check_consistency)
+
+        self.file_id = None
         with Dataset(self.filename) as lut_file:
             # Identify requested channel subset
             self.channels = lut_file["channel_id"][...]
@@ -426,84 +597,90 @@ class OracLut(object):
                 self.t1 = None
                 self.t2 = None
 
-    def solar_constant(self, doy):
-        if self.f1 is not None:
-            # Old approximation for F0 variation throughout the year
-            return self.f0 + self.f1 * np.cos(2. * np.pi * doy / 365.)
+    def state_space(self, channels, satzen, solzen, relazi):
+        """Interpolate angles, returning depth/radius sheets
 
-        # New (better) approximation
-        return self.f0 / (1. - 0.0167086 * np.cos((2.* np.pi * (doy - 4.)) /
-                                                  365.256363))**2
-
-    def rad2temp(self, radiance):
-        """Convert radiance into brightness temperature"""
-
-        radiance[radiance < 1e-6] = 1e-6
-
-        c = np.log(self.b1 / radiance + 1.)
-        t_eff = self.b2 / c
-        t = (t_eff - self.t1) / self.t2
-
-        dt_dr = self.b1 * self.b2 / (self.t2 * c * c * radiance * (radiance + self.b1))
-
-        return t, dt_dr
-
-    def temp2rad(self, temperature):
-        """Convert brightness temperature into radiance"""
-
-        t_eff = temperature * self.t2 + self.t1
-        bb = self.b2 / t_eff
-        c = np.exp(bb)
-        denom = c - 1.
-        r = self.b1 / denom
-
-        dr_dt = self.b1 * bb * c * self.t2 / (t_eff * denom * denom)
-
-        return r, dr_dt
-
-    def __call__(self, channels, satzen, solzen, relazi, tau, re):
-        """Deal with different dimension order/manner in types of LUT"""
+        This is a linear interpolation as done within the Fortran.
+        All arguments are 1D arrays of the same length."""
         if self.satellite_zenith_spacing.endswith("logarithmic"):
             satzen = np.log10(satzen)
         if self.solar_zenith_spacing.endswith("logarithmic"):
             solzen = np.log10(solzen)
         if self.relative_azimuth_spacing.endswith("logarithmic"):
             relazi = np.log10(relazi)
-        if self.optical_depth_spacing.endswith("logarithmic"):
-            tau = np.log10(tau)
-        if self.effective_radius_spacing.endswith("logarithmic"):
-            re = np.log10(re)
 
-        # Only ouuput sets that apply to every requsted channel
-        solar = True
-        thermal = True
-        for requested_ch in channels:
-            for available_ch, is_solar, is_thermal in zip(self.channels, self.solar, self.thermal):
-                if requested_ch == available_ch:
-                    solar &= is_solar
-                    thermal &= is_thermal
-                    break
-            else:
-                raise ValueError(f"Requested unavailable channel: {requested_ch}")
+        isat = np.digitize(satzen, self.r_0v.grid[1])
+        dsat = ((self.r_0v.grid[1][isat] - satzen) /
+                (self.r_0v.grid[1][isat] - self.r_0v.grid[1][isat-1]))
+        isol = np.digitize(solzen, self.r_0v.grid[2])
+        dsol = ((self.r_0v.grid[2][isol] - solzen) /
+                (self.r_0v.grid[2][isol] - self.r_0v.grid[2][isol-1]))
+        irel = np.digitize(relazi, self.r_0v.grid[0])
+        drel = ((self.r_0v.grid[0][irel] - relazi) /
+                (self.r_0v.grid[0][irel] - self.r_0v.grid[0][irel-1]))
+        isatsol = np.digitize(satzen, self.r_0v.grid[2])
+        dsatsol = ((self.r_0v.grid[2][isatsol] - satzen) /
+                (self.r_0v.grid[2][isatsol] - self.r_0v.grid[2][isatsol-1]))
+
+        assert all([i in self.channels for i in channels])
+        ch = np.array([np.argmax(self.channels == i) for i in channels])
 
         out = dict(
-            t_dv=self.t_dv((satzen, tau, re, channels)),
-            t_dd=self.t_dd((tau, re, channels)),
-            r_dv=self.r_dv((satzen, tau, re, channels)),
-            r_dd=self.r_dd((tau, re, channels)),
-            ext=self.ext((re, channels)),
-            ext_ratio=self.ext_ratio((re, channels)),
+            t_dv=(
+                (1-dsat) * self.t_dv.values[isat,:,:,ch].T +
+                dsat * self.t_dv.values[isat-1,:,:,ch].T),
+            t_dd=self.t_dd.values[:,:,ch],
+            r_dv=(
+                (1-dsat) * self.r_dv.values[isat,:,:,ch].T +
+                dsat * self.r_dv.values[isat-1,:,:,ch].T),
+            r_dd=self.r_dd.values[:,:,ch],
+            ext=self.ext.values[:,ch],
+            ext_ratio=self.ext_ratio.values[:,ch],
         )
-        if solar:
-            out["r_0v"] = self.r_0v((relazi, satzen, solzen, tau, re, channels))
-            out["r_0d"] = self.r_0d((solzen, tau, re, channels))
-            out["t_0d"] = self.t_0d((solzen, tau, re, channels))
-            out["t_00"] = self.t_00((solzen, tau, re, channels))
-            # Use satzen on solzen axis (which assumes its in bounds)
-            out["t_vd"] = self.t_0d((satzen, tau, re, channels))
-            out["t_vv"] = self.t_00((satzen, tau, re, channels))
-        if thermal:
-            out["e_md"] = self.e_md((satzen, tau, re, channels))
+
+        # Transposes enable broadcasting with 1D arrays but putting channel dimension last
+        vi = np.array([np.argmax(self.channels[self.solar] == i)
+                       for i, solar in zip(channels, self.solar[ch]) if solar])
+        dsat_, dsol_, drel_, dsatsol_, isat_, isol_, irel_, isatsol_ = map(
+            lambda arr: arr[self.solar[ch]],
+            (dsat, dsol, drel, dsatsol, isat, isol, irel, isatsol))
+        out["r_0v"] = (
+            (1-dsat_) * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_,isol_,:,:,vi].T +
+            dsat_ * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_,:,:,vi].T +
+            (1-dsat_) * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_,isol_-1,:,:,vi].T +
+            dsat_ * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_-1,:,:,vi].T +
+            (1-dsat_) * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_,isol_,:,:,vi].T +
+            dsat_ * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_,:,:,vi].T +
+            (1-dsat_) * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_,isol_-1,:,:,vi].T +
+            dsat_ * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_-1,:,:,vi].T)
+        out["r_0d"] = (
+            (1-dsol_) * self.r_0d.values[isol_,:,:,vi].T +
+            dsol_ * self.r_0d.values[isol_-1,:,:,vi].T)
+        out["t_0d"] = (
+            (1-dsol_) * self.t_0d.values[isol_,:,:,vi].T +
+            dsol_ * self.t_0d.values[isol_-1,:,:,vi].T)
+        out["t_00"] = (
+            (1-dsol_) * self.t_00.values[isol_,:,:,vi] .T+
+            dsol_ * self.t_00.values[isol_-1,:,:,vi].T)
+        out["t_vd"] = (
+            (1-dsatsol_) * self.t_0d.values[isatsol_,:,:,vi].T +
+            dsatsol_ * self.t_0d.values[isatsol_-1,:,:,vi].T)
+        out["t_vv"] = (
+            (1-dsatsol_) * self.t_00.values[isatsol_,:,:,vi].T +
+            dsatsol_ * self.t_00.values[isatsol_-1,:,:,vi].T)
+
+        ir = np.array([np.argmax(self.channels[self.thermal] == i)
+                       for i, thermal in zip(channels, self.thermal[ch])
+                       if thermal])
+        dsat_, isat_ = map(lambda arr: arr[self.thermal[ch]], (dsat, isat))
+        out["e_md"] = (
+            (1-dsat_) * self.e_md.values[isat_,:,:,ir].T +
+            dsat_ * self.e_md.values[isat_-1,:,:,ir].T)
+
+        for key, val in out.items():
+            if key not in ("t_dd", "r_dd", "ext", "ext_ratio"):
+                # Flip od/ref axis the right way around
+                out[key] = np.moveaxis(val, 0, 1)
 
         return out
 
