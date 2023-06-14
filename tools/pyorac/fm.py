@@ -182,6 +182,12 @@ class PreprocessorFiles(object):
         from dateutil.parser import parse
         return parse(self.attribute("Date_Created"))
 
+    def spixels(self):
+        """Iterate SPixel instances over this field"""
+        for i in range(self.nalong):
+            for j in range(self.nacross):
+                yield SPixel.from_preproc(self, i, j)
+
 
 class SPixel(object):
     def __init__(self, *args):
@@ -364,6 +370,10 @@ class SPixel(object):
         return temp
 
     @property
+    def nch(self):
+        return len(self.channels)
+
+    @property
     def tsf_lw(self):
         """Longwave transmission to surface"""
         return self.tac_lw[-1]
@@ -397,10 +407,41 @@ class SPixel(object):
                 value = value()
             yield value[i0] * (1.-delta) + value[i1] * delta
 
+    def interp_in_logpressure(self, pressure, *args):
+        from pyorac.util import bound_grid
+
+        i0, i1, delta = bound_grid(np.log(self.pressure), np.log(pressure))
+        for name in args:
+            value = getattr(self, name)
+            if not isinstance(value, np.ndarray):
+                value = value()
+            yield value[i0] * (1.-delta) + value[i1] * delta
+
     def orac_forward_model(self, lut, **kwargs):
         solar = SolarBrdfEq3(self.subset(self.solar), lut, **kwargs)
         thermal = ThermalForwardModel(self.subset(self.thermal), lut, **kwargs)
         return solar, thermal
+
+    def iter_channels(self):
+        """Iterate over wavelength-dependendent quantities"""
+        j, k = -1, -1
+        for i in range(self.nch):
+            out = dict(channel=self.channels[i], index=i, solar=self.solar[i],
+                       thermal=self.thermal[i], meas=self.ym[i], sy=self.sy[i])
+            if self.solar[i]:
+                j += 1
+                out["solar_index"] = j
+                for key in ("rs", "rho_0v", "rho_0d", "rho_dv", "rho_dd",
+                            "tac_sw", "tbc_sw"):
+                    out[key] = getattr(self, key)[j]
+            if self.thermal[i]:
+                k += 1
+                out["thermal_index"] = k
+                for key in ("emissivity","tac_lw", "tbc_lw", "rac_up",
+                            "rac_down", "rbc_up"):
+                    out[key] = getattr(self, key)[k]
+
+            yield out
 
 
 class OracForwardModel(ABC):
