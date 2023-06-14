@@ -353,24 +353,24 @@ class OracLut(object):
 
             # Read tables
             self.t_dv = RegularGridInterpolator(
-                (satzen, tau, re, self.channels), lut_file["T_dv"][...], method
+                (satzen, tau, re, self.channels), lut_file["T_dv"][...].data, method
             )
             self.t_dd = RegularGridInterpolator(
-                (tau, re, self.channels), lut_file["T_dd"][...], method
+                (tau, re, self.channels), lut_file["T_dd"][...].data, method
             )
             self.r_dv = RegularGridInterpolator(
-                (satzen, tau, re, self.channels), lut_file["R_dv"][...], method
+                (satzen, tau, re, self.channels), lut_file["R_dv"][...].data, method
             )
             self.r_dd = RegularGridInterpolator(
-                (tau, re, self.channels), lut_file["R_dd"][...], method
+                (tau, re, self.channels), lut_file["R_dd"][...].data, method
             )
             self.ext = RegularGridInterpolator(
                 (re, self.channels),
-                lut_file["extinction_coefficient"][...], method
+                lut_file["extinction_coefficient"][...].data, method
             )
             self.ext_ratio = RegularGridInterpolator(
                 (re, self.channels),
-                lut_file["extinction_coefficient_ratio"][...], method
+                lut_file["extinction_coefficient_ratio"][...].data, method
             )
 
             # Solar channels
@@ -379,19 +379,19 @@ class OracLut(object):
 
                 self.r_0v = RegularGridInterpolator(
                     (relazi, satzen, solzen, tau, re, solar_channels),
-                    lut_file["R_0v"][...], method
+                    lut_file["R_0v"][...].data, method
                 )
                 self.r_0d = RegularGridInterpolator(
                     (solzen, tau, re, solar_channels),
-                    lut_file["R_0d"][...], method
+                    lut_file["R_0d"][...].data, method
                 )
                 self.t_0d = RegularGridInterpolator(
                     (solzen, tau, re, solar_channels),
-                    lut_file["T_0d"][...], method
+                    lut_file["T_0d"][...].data, method
                 )
                 self.t_00 = RegularGridInterpolator(
                     (solzen, tau, re, solar_channels),
-                    lut_file["T_00"][...], method
+                    lut_file["T_00"][...].data, method
                 )
 
                 # Solar constant
@@ -411,7 +411,7 @@ class OracLut(object):
 
                 self.e_md = RegularGridInterpolator(
                     (satzen, tau, re, thermal_channels),
-                    lut_file["E_md"][...], method
+                    lut_file["E_md"][...].data, method
                 )
 
                 # Planck coefficients
