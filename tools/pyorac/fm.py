@@ -478,9 +478,9 @@ class SolarForwardModel(OracForwardModel):
             raise ValueError("All channels must be solar; use Spixel.subset()")
 
         # Secant of the solar zenith
-        self.sec_0 = 1. / np.cos(spixel.solzen)
+        self.sec_0 = 1. / np.cos(np.radians(spixel.solzen))
         # Secant of the satellite zenith
-        self.sec_v = 1. / np.cos(spixel.satzen)
+        self.sec_v = 1. / np.cos(np.radians(spixel.satzen))
         # Transmission from the surface
         self.tsf = spixel.tsf_sw
         # Use provided surface as default
