@@ -359,15 +359,15 @@ Ctrl%RS%Use_Full_BRDF       = {use_brdf}""".format(
     # If a netcdf LUT is being used then write NCDF LUT filename
     if SETTINGS[args.phase].sad == 'netcdf':
         driver += """
-Ctrl%FID%NCDF_LUT_Filename = "{ncdf_lut_filename}"
-        """.format(ncdf_lut_filename=SETTINGS[args.phase].sad_filename(args.File))
+Ctrl%FID%NCDF_LUT_Filename = "{ncdf_lut_filename}\"""".format(
+    ncdf_lut_filename=SETTINGS[args.phase].sad_filename(args.File))
 
     # Optional driver file lines
     if args.multilayer is not None:
         if SETTINGS[args.phase].sad == 'netcdf':
             driver += """
-Ctrl%FID%NCDF_LUT_Filename2 = "{ncdf_lut_filename}"
-        """.format(ncdf_lut_filename=SETTINGS[args.multilayer[0]].sad_filename(args.File))
+Ctrl%FID%NCDF_LUT_Filename2 = "{ncdf_lut_filename}\"""".format(
+    ncdf_lut_filename=SETTINGS[args.multilayer[0]].sad_filename(args.File))
         driver += """
 Ctrl%LUTClass2              = "{}"
 Ctrl%FID%SAD_Dir2           = "{}"
