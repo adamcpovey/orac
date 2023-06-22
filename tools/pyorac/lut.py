@@ -81,8 +81,8 @@ class OracLutBase(ABC):
         self._particle = None
         self._inst = None
 
-    @staticmethod
-    def from_description(sad_dirs, particle, inst, **kwargs):
+    @classmethod
+    def from_description(cls, sad_dirs, particle, inst, **kwargs):
         """Initialise from pyorac settings objects
 
         Args:
@@ -93,7 +93,7 @@ class OracLutBase(ABC):
 
         fdr = particle.sad_dir(sad_dirs, inst)
         filename = os.path.join(fdr, particle.sad_filename(inst))
-        self = type(self)(filename, **kwargs)
+        self = cls(filename, **kwargs)
         self._particle = particle
         self._inst = inst
         return self
@@ -183,17 +183,26 @@ class OracLutBase(ABC):
 
         This is a linear interpolation as done within the Fortran."""
 
+    @abstractmethod
+    def state_mesh(self):
+        """Returns the mesh of grid points for the outputs of state_space"""
+
+    @abstractmethod
+    def uncertainty(self, pixel):
+        """Calculates the ORAC uncertainty model for a given pixel
+
+        Arguments and keywords will vary with table type as they use
+        different calculations. See specific documentation."""
+
 
 class OracTextLut(OracLutBase):
-    def __init__(self, filename, method='cubic', check_consistency=False,
-                 t_dv_from_t_0d=True):
+    def __init__(self, filename, method='cubic', check_consistency=False):
         """
         Args:
         filename: name of look-up table to open
 
         Kwargs:
         method: interpolation method to use. Default cubic.
-        t_dv_from_t_0d: ignore the diffuse-to-view transmission table
         check_consistency: ensure that the number of channels is consistent
             across read operations (mostly important for text tables)
         """
@@ -205,16 +214,17 @@ class OracTextLut(OracLutBase):
             raise ValueError("Unable to find tables from "+filename)
         self._open_text_tables(method)
 
-        self.t_dv_from_t_0d = t_dv_from_t_0d
+    def __call__(self, *args, t_dv_from_t_0d=True):
+        """Interpolate table to given values
 
-    def __call__(self, *args):
-        if self.t_dv_from_t_0d:
+        t_dv_from_t_0d: ignore the diffuse-to-view transmission table"""
+        if t_dv_from_t_0d:
             tmp = self.t_dv
             self.t_dv = self.t_0d
         try:
             return super(OracTextLut, self).__call__(*args)
         finally:
-            if self.t_dv_from_t_0d:
+            if t_dv_from_t_0d:
                 self.t_dv = tmp
 
     def _open_text_chan_files(self):
@@ -423,11 +433,13 @@ class OracTextLut(OracLutBase):
         else:
             self.e_md = None
 
-    def state_space(self, channels, satzen, solzen, relazi):
+    def state_space(self, channels, satzen, solzen, relazi, t_dv_from_t_0d=True):
         """Interpolate angles, returning depth/radius sheets
 
         This is a linear interpolation as done within the Fortran.
-        Arguments are either scalars or 1D arrays of the same length"""
+        Arguments are either scalars or 1D arrays of the same length
+
+        t_dv_from_t_0d: ignore the diffuse-to-view transmission table"""
         if self.satellite_zenith_spacing.endswith("logarithmic"):
             satzen = np.log10(satzen)
         if self.solar_zenith_spacing.endswith("logarithmic"):
@@ -453,7 +465,7 @@ class OracTextLut(OracLutBase):
         return dict(
             t_dv=(((1-dsatsol) * self.t_0d.values[ch,:,isatsol].T +
                    dsatsol * self.t_0d.values[ch,:,isatsol-1].T)
-                  if self.t_dv_from_t_0d else
+                  if t_dv_from_t_0d else
                   ((1-dsat) * self.t_dv.values[ch,:,isat].T +
                    dsat * self.t_dv.values[ch,:,isat-1].T)),
             t_dd=self.t_dd.values[ch].T,
@@ -483,6 +495,11 @@ class OracTextLut(OracLutBase):
         e_md=((1-dsat) * self.e_md.values[ch,:,isat].T +
               dsat * self.e_md.values[ch,:,isat-1].T),
     )
+
+    def state_mesh(self):
+        return np.meshgrid(_edges_from_points(self.r_dd.grid[1]),
+                           _edges_from_points(10.0**self.r_dd.grid[2]))
+
 
     def uncertainty(self, pixel, alwaysthermal=False, cloudtype=0, maxsolzen=75.):
         """Calculate measurement variance for a pixel the old way
@@ -661,7 +678,26 @@ class OracNcdfLut(OracLutBase):
         """Interpolate angles, returning depth/radius sheets
 
         This is a linear interpolation as done within the Fortran.
-        All arguments are 1D arrays of the same length."""
+        All arguments are either scalars or 1D arrays of the same length."""
+        # Make all arguments arrays
+        if not isinstance(channels, np.ndarray):
+            channels = np.asarray([channels]
+                                  if np.isscalar(channels) else channels)
+        if not isinstance(satzen, np.ndarray):
+            satzen = np.asarray([satzen] * len(channels)
+                                if np.isscalar(satzen) else satzen)
+        if not isinstance(solzen, np.ndarray):
+            solzen = np.asarray([solzen] * len(channels)
+                                if np.isscalar(solzen) else solzen)
+        if not isinstance(relazi, np.ndarray):
+            relazi = np.asarray([relazi] * len(channels)
+                                if np.isscalar(relazi) else relazi)
+
+        # Ensure those are the same length
+        assert channels.shape == satzen.shape
+        assert channels.shape == solzen.shape
+        assert channels.shape == relazi.shape
+
         if self.satellite_zenith_spacing.endswith("logarithmic"):
             satzen = np.log10(satzen)
         if self.solar_zenith_spacing.endswith("logarithmic"):
@@ -682,8 +718,7 @@ class OracNcdfLut(OracLutBase):
         dsatsol = ((self.r_0v.grid[2][isatsol] - satzen) /
                 (self.r_0v.grid[2][isatsol] - self.r_0v.grid[2][isatsol-1]))
 
-        assert all([i in self.channels for i in channels])
-        ch = np.array([np.argmax(self.channels == i) for i in channels])
+        ch = [i in channels for i in self.channels]
 
         out = dict(
             t_dv=(
@@ -701,41 +736,43 @@ class OracNcdfLut(OracLutBase):
         # Transposes enable broadcasting with 1D arrays but putting channel dimension last
         vi = np.array([np.argmax(self.channels[self.solar] == i)
                        for i, solar in zip(channels, self.solar[ch]) if solar])
-        dsat_, dsol_, drel_, dsatsol_, isat_, isol_, irel_, isatsol_ = map(
-            lambda arr: arr[self.solar[ch]],
-            (dsat, dsol, drel, dsatsol, isat, isol, irel, isatsol))
-        out["r_0v"] = (
-            (1-dsat_) * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_,isol_,:,:,vi].T +
-            dsat_ * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_,:,:,vi].T +
-            (1-dsat_) * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_,isol_-1,:,:,vi].T +
-            dsat_ * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_-1,:,:,vi].T +
-            (1-dsat_) * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_,isol_,:,:,vi].T +
-            dsat_ * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_,:,:,vi].T +
-            (1-dsat_) * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_,isol_-1,:,:,vi].T +
-            dsat_ * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_-1,:,:,vi].T)
-        out["r_0d"] = (
-            (1-dsol_) * self.r_0d.values[isol_,:,:,vi].T +
-            dsol_ * self.r_0d.values[isol_-1,:,:,vi].T)
-        out["t_0d"] = (
-            (1-dsol_) * self.t_0d.values[isol_,:,:,vi].T +
-            dsol_ * self.t_0d.values[isol_-1,:,:,vi].T)
-        out["t_00"] = (
-            (1-dsol_) * self.t_00.values[isol_,:,:,vi] .T+
-            dsol_ * self.t_00.values[isol_-1,:,:,vi].T)
-        out["t_vd"] = (
-            (1-dsatsol_) * self.t_0d.values[isatsol_,:,:,vi].T +
-            dsatsol_ * self.t_0d.values[isatsol_-1,:,:,vi].T)
-        out["t_vv"] = (
-            (1-dsatsol_) * self.t_00.values[isatsol_,:,:,vi].T +
-            dsatsol_ * self.t_00.values[isatsol_-1,:,:,vi].T)
+        if vi.size > 0:
+            dsat_, dsol_, drel_, dsatsol_, isat_, isol_, irel_, isatsol_ = map(
+                lambda arr: arr[self.solar[ch]],
+                (dsat, dsol, drel, dsatsol, isat, isol, irel, isatsol))
+            out["r_0v"] = (
+                (1-dsat_) * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_,isol_,:,:,vi].T +
+                dsat_ * (1-dsol_) * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_,:,:,vi].T +
+                (1-dsat_) * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_,isol_-1,:,:,vi].T +
+                dsat_ * dsol_ * (1-drel_) * self.r_0v.values[irel_,isat_-1,isol_-1,:,:,vi].T +
+                (1-dsat_) * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_,isol_,:,:,vi].T +
+                dsat_ * (1-dsol_) * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_,:,:,vi].T +
+                (1-dsat_) * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_,isol_-1,:,:,vi].T +
+                dsat_ * dsol_ * drel_ * self.r_0v.values[irel_-1,isat_-1,isol_-1,:,:,vi].T)
+            out["r_0d"] = (
+                (1-dsol_) * self.r_0d.values[isol_,:,:,vi].T +
+                dsol_ * self.r_0d.values[isol_-1,:,:,vi].T)
+            out["t_0d"] = (
+                (1-dsol_) * self.t_0d.values[isol_,:,:,vi].T +
+                dsol_ * self.t_0d.values[isol_-1,:,:,vi].T)
+            out["t_00"] = (
+                (1-dsol_) * self.t_00.values[isol_,:,:,vi] .T+
+                dsol_ * self.t_00.values[isol_-1,:,:,vi].T)
+            out["t_vd"] = (
+                (1-dsatsol_) * self.t_0d.values[isatsol_,:,:,vi].T +
+                dsatsol_ * self.t_0d.values[isatsol_-1,:,:,vi].T)
+            out["t_vv"] = (
+                (1-dsatsol_) * self.t_00.values[isatsol_,:,:,vi].T +
+                dsatsol_ * self.t_00.values[isatsol_-1,:,:,vi].T)
 
         ir = np.array([np.argmax(self.channels[self.thermal] == i)
                        for i, thermal in zip(channels, self.thermal[ch])
                        if thermal])
-        dsat_, isat_ = map(lambda arr: arr[self.thermal[ch]], (dsat, isat))
-        out["e_md"] = (
-            (1-dsat_) * self.e_md.values[isat_,:,:,ir].T +
-            dsat_ * self.e_md.values[isat_-1,:,:,ir].T)
+        if ir.size > 0:
+            dsat_, isat_ = map(lambda arr: arr[self.thermal[ch]], (dsat, isat))
+            out["e_md"] = (
+                (1-dsat_) * self.e_md.values[isat_,:,:,ir].T +
+                dsat_ * self.e_md.values[isat_-1,:,:,ir].T)
 
         for key, val in out.items():
             if key not in ("t_dd", "r_dd", "ext", "ext_ratio"):
@@ -743,6 +780,10 @@ class OracNcdfLut(OracLutBase):
                 out[key] = np.moveaxis(val, 0, 1)
 
         return out
+
+    def state_mesh(self):
+        return np.meshgrid(_edges_from_points(self.r_dd.grid[1]),
+                           _edges_from_points(10.0**self.r_dd.grid[0]))
 
     def uncertainty(self, pixel, gain, alwaysthermal=False, maxsolzen=75.,
                     thermal_nehomog=0.50, solar_nehomog=0.01,
@@ -936,3 +977,7 @@ def read_orac_text_lut(filename):
                   lut[-m:].reshape(naxes[::2]))
 
     return tables, axes, naxes, daxes
+
+
+def _edges_from_points(z):
+    return np.r_[z[0], 0.5*(z[:-1] + z[1:]), z[-1]]

@@ -45,6 +45,8 @@ from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
 
 
+RHO_NAMES = ("rho_0v", "rho_dv", "rho_0d", "rho_dd")
+
 class PreprocessorFiles(object):
     """Container to fetch fields from a set of preprocessor files."""
     SUFFIXES = ["config", "alb", "clf", "geo", "loc", "lsf", "msi", "prtm",
@@ -111,6 +113,13 @@ class PreprocessorFiles(object):
 
         raise KeyError(f"Cannot locate field {key} in files {self.root}*nc")
 
+    def __call__(self, x, y, **kwargs):
+        """Returns an SPixel for a specific pixel.
+
+        I used [] indexing for variable access to be consistent with
+        netCDF4.Dataset and pyorac.Swath so this gets ()."""
+        return SPixel.from_preproc(self, x, y, **kwargs)
+
     def attribute(self, key):
         with self.dataset(self.SUFFIXES[0]) as fobj:
             return fobj.__dict__[key]
@@ -123,17 +132,13 @@ class PreprocessorFiles(object):
         with self.dataset(self.SUFFIXES[0]) as fobj:
             return fobj.dimensions["nc_conf"].size
     @property
-    def nchannels(self):
-        with self.dataset(self.SUFFIXES[0]) as fobj:
-            return fobj.dimensions["nc_conf"].size
-    @property
     def nsolar(self):
         with self.dataset(self.SUFFIXES[0]) as fobj:
-            return fobj.dimensions["nalb_conf"].size
+            return fobj.dimensions["nc_alb"].size
     @property
     def nthermal(self):
         with self.dataset(self.SUFFIXES[0]) as fobj:
-            return fobj.dimensions["nemis_conf"].size
+            return fobj.dimensions["nc_emis"].size
     @property
     def nlat(self):
         with self.dataset(self.SUFFIXES[0]) as fobj:
@@ -182,11 +187,11 @@ class PreprocessorFiles(object):
         from dateutil.parser import parse
         return parse(self.attribute("Date_Created"))
 
-    def spixels(self):
+    def spixels(self, **kwargs):
         """Iterate SPixel instances over this field"""
-        for i in range(self.nalong):
-            for j in range(self.nacross):
-                yield SPixel.from_preproc(self, i, j)
+        for x in range(self.nalong):
+            for y in range(self.nacross):
+                yield SPixel.from_preproc(self, x, y, **kwargs)
 
 
 class SPixel(object):
@@ -199,8 +204,8 @@ class SPixel(object):
          self.geopotential, self.emissivity, self.tac_lw, self.tbc_lw, self.rac_up,
          self.rac_down, self.rbc_up, self.tac_sw, self.tbc_sw) = map(np.asarray, args[3:])
 
-    @staticmethod
-    def from_preproc(preproc, x, y, spixel_y_to_ctrl_y_index=None):
+    @classmethod
+    def from_preproc(cls, preproc, x, y, spixel_y_to_ctrl_y_index=None):
         """Given swath coordinates, extracts that pixel from ORAC preproc
 
         Largely follows src/get_spixel.F90 and its subroutines, such that
@@ -258,7 +263,7 @@ class SPixel(object):
         except KeyError:
             tac_sw, tbc_sw = [None] * 2
 
-        return SPixel(
+        return cls(
             time, lat, lon, solzen, satzen, relazi, land, preproc.channel_ids,
             preproc.solar, preproc.thermal,
             ym, sy, rs, rho_0v, rho_0d, rho_dv, rho_dd, pre, temp, geo,
@@ -431,15 +436,14 @@ class SPixel(object):
             if self.solar[i]:
                 j += 1
                 out["solar_index"] = j
-                for key in ("rs", "rho_0v", "rho_0d", "rho_dv", "rho_dd",
-                            "tac_sw", "tbc_sw"):
-                    out[key] = getattr(self, key)[j]
+                for key in RHO_NAMES + ("rs", "tac_sw", "tbc_sw"):
+                    out[key] = getattr(self, key)[...,j]
             if self.thermal[i]:
                 k += 1
                 out["thermal_index"] = k
                 for key in ("emissivity","tac_lw", "tbc_lw", "rac_up",
                             "rac_down", "rbc_up"):
-                    out[key] = getattr(self, key)[k]
+                    out[key] = getattr(self, key)[...,k]
 
             yield out
 
@@ -456,47 +460,68 @@ class OracForwardModel(ABC):
         self.pixel = spixel
         self.nch = self.pixel.channels.size
 
+        # Set priors
+        prior = dict(coverage=1., surface_temperature=spixel.temperature[-1],
+                     top_pressure=900., optical_depth=None,
+                     effective_radius=None, lut=lut)
         if lut._particle is not None:
-            # Fetch priors from lut
+            # Fetch priors based on LUT type
             if lut._particle.name in ("WAT", "liquid-water"):
-                p_prior = 900.
-                tau_prior = 0.8
-                re_prior = 12.
+                prior["optical_depth"] = 10.**0.8
+                prior["effective_radius"] = 12.
             elif lut._particle.name in ("ICE", "water-ice"):
-                p_prior = 400.
-                tau_prior = 0.8
-                re_prior = 30.
+                prior["top_pressure"] = 400.
+                prior["optical_depth"] = 10.**0.8
+                prior["effective_radius"] = 30.
             else:
-                # Aerosols define their own priors
-                p_prior = 500. # Value unimportant
+                # Aerosols have type-specific priors
                 for parameter in lut._particle.inv:
                     if parameter.var == 'ITau':
-                        tau_prior = paramter.ap
+                        prior["optical_depth"] = 10.**paramter.ap
                     elif parameter.var == 'IRe':
-                        re_prior = parameter.ap
-        else:
-            p_prior = 900.
-            tau_prior = 0.8
-            re_prior = 12.
+                        prior["effective_radius"] = parameter.ap
 
-        self.coverage = kwargs.pop("coverage", 1.)
-        self.surface_temperature = kwargs.pop("surface_temperature", 300.)
-        self._set_lut_terms(lut, kwargs.pop("optical_depth", tau_prior),
-                            kwargs.pop("effective_radius", re_prior))
-        self._set_top_pressure(kwargs.pop("top_pressure", p_prior))
-        self.set_state(**kwargs)
+        self.set_state(**(prior | kwargs))
 
-    @abstractmethod
-    def _set_top_pressure(self, top_pressure):
-        """Interpolate the transmission/reflectance profiles to the layer pressure"""
-
-    @abstractmethod
-    def _set_lut_terms(self, lut, optical_depth, effective_radius):
-        """Interpolate all look-up tables to given tau and r_eff"""
-
-    @abstractmethod
     def set_state(self, **kwargs):
         """Change the value of one or more state vector elements"""
+
+        if upd := {k:v for k,v in kwargs.items() if k in ("lut", "optical_depth", "effective_radius", "t_dv_from_t_0d")}:
+            self.__dict__.update(upd)
+            self._set_nuclei_terms()
+
+        if upd := {k:v for k,v in kwargs.items() if k in ("coverage")}:
+            self.__dict__.update(upd)
+
+    def _set_nuclei_terms(self, use_these):
+        """Interpolate all look-up tables to given tau and r_eff"""
+
+        # Work out the SPixel -> LUT indexing
+        self.lut_ind = [np.argmax(self.lut.channels[use_these] == ch)
+                        for ch in self.pixel.channels]
+        assert len(np.unique(self.lut_ind)) == len(self.lut_ind)
+
+        # Only pass this keyword if we actively asked for it
+        try:
+            kwargs = dict(t_dv_from_t_0d=self.t_dv_from_t_0d)
+        except AttributeError:
+            kwargs = dict()
+
+        # This will silently allow unavailable channels through
+        if self.optical_depth is None and self.effective_radius is None:
+            self.__dict__.update(self.lut.state_space(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi, **kwargs
+            ))
+        else:
+            self.__dict__.update(self.lut(
+                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
+                self.pixel.relazi, self.optical_depth, self.effective_radius, **kwargs
+            ))
+
+    @abstractmethod
+    def _set_top_pressure(self):
+        """Interpolate the transmission/reflectance profiles to the layer pressure"""
 
     def _total_r(self):
         """Modelled R at top-of-atmosphere"""
@@ -540,27 +565,26 @@ class SolarForwardModel(OracForwardModel):
         self.rho_dv = spixel.rho_dv
         self.rho_dd = spixel.rho_dd
 
+        if "ss" in kwargs and "sg" not in kwargs:
+            # Prior Swansea gamma parameter
+            kwargs["sg"] = 0.3
+
         super().__init__(spixel, lut, **kwargs)
 
     def set_state(self, **kwargs):
-        """Copy this model, changing the specified keywords"""
-        if "coverage" in kwargs:
-            self.coverage = kwargs.pop("coverage")
-        if "lut" in kwargs or "optical_depth" in kwargs or "effective_radius" in kwargs:
-            self._set_lut_terms(
-                kwargs.pop("lut", self._lut),
-                kwargs.pop("optical_depth", self.optical_depth),
-                kwargs.pop("effective_radius", self.effective_radius)
-            )
-        if "top_pressure" in kwargs:
-            self._set_top_pressure(kwargs.pop("top_pressure"))
-        if "ss" in kwargs:
-            if "sp" not in kwargs:
-                raise ValueError("Must provide S and P coefficients for Swansea surface")
-            if kwargs["ss"].size == self.nch and kwargs["sp"].size == self.nch:
-                # User has dealt with channel indexing
-                self._init_swansea_surface(**kwargs)
-            else:
+        super().set_state(**kwargs)
+
+        if upd := {k:v for k,v in kwargs.items() if k in ("lut", "top_pressure")}:
+            self.__dict__.update(upd)
+            self._set_top_pressure()
+
+        if upd := {k:v for k,v in kwargs.items() if k in RHO_NAMES}:
+            self._set_oxford_surface(upd)
+
+        if upd := {k:v for k,v in kwargs.items() if k in ("ss", "sp", "sg")}:
+            if ("ss" in upd) != ("sp" in upd):
+                raise ValueError("Must provide both S and P coefficients for Swansea surface")
+            if upd["ss"].size != self.nch or upd["sp"].size != self.nch:
                 # Identify views from values of sec_v, small being near nadir
                 view_values = np.unique(self.sec_v).sort()
                 view = [np.argmax(view_values == val) for val in self.sec_v]
@@ -570,62 +594,44 @@ class SolarForwardModel(OracForwardModel):
                     filt = view == i
                     ch[filt] = np.arange(filt.sum())
 
-                kwargs["ss"] = kwargs["ss"][ch]
-                kwargs["sp"] = kwargs["sp"][view]
-                self._init_swansea_surface(**kwargs)
-        elif any(key.startswith("rho") for key in kwargs.keys()):
-            self._init_oxford_surface(**kwargs)
+                upd["ss"] = upd["ss"][ch]
+                upd["sp"] = upd["sp"][view]
 
-    def _set_top_pressure(self, top_pressure):
+            self.__dict__.update(upd)
+            self._init_swansea_surface()
+
+    def _set_nuclei_terms(self):
+        super()._set_nuclei_terms(self.lut.solar)
+
+    def _set_top_pressure(self):
         """Interpolate the clear-sky radiative transfer"""
         self.tac, self.tbc = self.pixel.interp_in_pressure(
-            top_pressure, "tac_sw", "tbc_sw"
+            self.top_pressure, "tac_sw", "tbc_sw"
         )
-        self.top_pressure = top_pressure
 
-    def _set_lut_terms(self, lut, optical_depth, effective_radius):
-        """Interpolate look-up tables"""
-        # This will silently allow unavailable channels to be requested
-        if optical_depth is None and effective_radius is None:
-            # Return 2D array
-            self.__dict__.update(lut.state_space(
-                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-                self.pixel.relazi
-            ))
-        else:
-            # Return point
-            self.__dict__.update(lut(
-                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-                self.pixel.relazi, optical_depth, effective_radius
-            ))
-        self._lut = lut
-        self.lut_ind = [np.argmax(lut.channels[lut.solar] == ch) for ch in self.pixel.channels]
-        self.optical_depth = optical_depth
-        self.effective_radius = effective_radius
-
-    def _set_swansea_surface(self, ss=None, sp=None, sg=0.3):
+    def _set_swansea_surface(self):
         """Swansea model of surface reflectance"""
-        sa = 1. - (1.-sg) * ss
+        sa = 1. - (1.-self.sg) * self.ss
 
-        self.rho_0v = sp * ss
-        self.rho_dd = sg * ss / sa
-        self.rho_0d = (1.-sg) * ss * self.rho_dd
+        self.rho_0v = self.sp * self.ss
+        self.rho_dd = self.sg * self.ss / sa
+        self.rho_0d = (1.-self.sg) * self.ss * self.rho_dd
         self.rho_dv = None
 
         sd = self.t_0d / (self.t_00 + self.t_0d)
         #self.rs = (1.-sd) * (sp*ss + sg*(1.-sg)*ss*ss/sa) + sd*sg*ss/sa
-        self.rs = ss * (sp + sd * (sg - sp) + sg * (1.-sg) * ss / sa)
+        self.rs = self.ss * (self.sp + sd * (self.sg - self.sp) +
+                             self.sg * (1.-self.sg) * self.ss / sa)
 
     def _set_oxford_surface(self, **kwargs):
         """Maintain ratio between different rho for some wavelengths"""
-        rho_names = ("rho_0v", "rho_dv", "rho_0d", "rho_dd")
-        for rho_name in rho_names:
+        for rho_name in RHO_NAMES:
             if rho_name in kwargs:
                 # Copy over data provided
                 value = kwargs[rho_name]
             else:
                 # Set using ratios from spixel
-                for ratio_rho_name in rho_names:
+                for ratio_rho_name in RHO_NAMES:
                     if ratio_rho_name in kwargs:
                         value = (getattr(self.pixel, rho_name) /
                                  getattr(self.pixel, ratio_rho_name) *
@@ -714,7 +720,7 @@ class SolarForwardModel(OracForwardModel):
         raise NotImplementedError
 
     def solar_constant(self):
-        return self._lut.solar_constant(self.pixel.time._dayofyr)[self.lut_ind]
+        return self.lut.solar_constant(self.pixel.time._dayofyr)[self.lut_ind]
 
 class SolarBrdfBase(SolarForwardModel):
     def a(self):
@@ -839,51 +845,28 @@ class ThermalForwardModel(OracForwardModel):
         super().__init__(spixel, lut, **kwargs)
 
     def set_state(self, **kwargs):
-        if "coverage" in kwargs:
-            self.coverage = kwargs.pop("coverage")
-        if "surface_temperature" in kwargs:
-            self.surface_temperature = kwargs.pop("surface_temperature")
-        if "lut" in kwargs or "optical_depth" in kwargs or "effective_radius" in kwargs:
-            self._set_lut_terms(
-                kwargs.get("lut", self._lut), # Leave in for next if
-                kwargs.pop("optical_depth", self.optical_depth),
-                kwargs.pop("effective_radius", self.effective_radius)
-            )
-        if "lut" in kwargs or "top_pressure" in kwargs:
-            self._set_top_pressure(kwargs.pop("top_pressure"))
+        super().set_state(**kwargs)
 
-    def _set_top_pressure(self, top_pressure):
+        if upd := {k:v for k,v in kwargs.items() if k in ("lut", "top_pressure", "surface_temperature")}:
+            self.__dict__.update(upd)
+            self._set_top_pressure()
+
+    def _set_nuclei_terms(self):
+        super()._set_nuclei_terms(self.lut.thermal)
+
+    def _set_top_pressure(self):
         """Interpolate the clear-sky radiative transfer"""
         (self.tac, self.tbc, self.top_temperature, self.rac_up, self.rac_down,
          self.rbc_up) = self.pixel.interp_in_pressure(
-            top_pressure, "tac_lw", "tbc_lw", "correct_temperature",
+            self.top_pressure, "tac_lw", "tbc_lw", "correct_temperature",
             "rac_up", "rac_down", "rbc_up"
         )
-        self.top_pressure = top_pressure
 
         self.b_cloud, _ = self.temp2rad(self.top_temperature)
         _, self.db_dts = self.temp2rad(self.pixel.temperature[-1])
         self.es_db_dts = self.db_dts * self.pixel.emissivity
 
         self.rbc_up += self.delta_ts * self.es_db_dts * self.tbc
-
-    def _set_lut_terms(self, lut, optical_depth, effective_radius):
-        """Interpolate look-up tables"""
-        # This will silently allow unavailable channels through
-        if optical_depth is None and effective_radius is None:
-            self.__dict__.update(lut.state_space(
-                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-                self.pixel.relazi
-            ))
-        else:
-            self.__dict__.update(lut(
-                self.pixel.channels, self.pixel.satzen, self.pixel.solzen,
-                self.pixel.relazi, optical_depth, effective_radius
-            ))
-        self._lut = lut
-        self.lut_ind = [np.argmax(lut.channels[lut.thermal] == ch) for ch in self.pixel.channels]
-        self.optical_depth = optical_depth
-        self.effective_radius = effective_radius
 
     @property
     def delta_ts(self):
@@ -916,13 +899,13 @@ class ThermalForwardModel(OracForwardModel):
         return ThermalUpperLayer(lut, self, **kwargs)
 
     def temp2rad(self, temperature):
-        b, db_dt = self._lut.temp2rad(temperature)
+        b, db_dt = self.lut.temp2rad(temperature)
         return b[self.lut_ind], db_dt[self.lut_ind]
 
     def rad2temp(self, radiance):
-        extended_radiance = np.ones(self._lut.thermal.sum())
+        extended_radiance = np.ones(self.lut.thermal.sum())
         extended_radiance[self.lut_ind] = radiance
-        t, dt_db = self._lut.rad2temp(extended_radiance)
+        t, dt_db = self.lut.rad2temp(extended_radiance)
         return t[self.lut_ind], dt_db[self.lut_ind]
 
 class ThermalUpperLayer(ThermalForwardModel):
