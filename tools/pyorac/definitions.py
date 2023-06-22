@@ -656,7 +656,7 @@ SETTINGS = {'WAT': ParticleType("WAT", sad="WAT"),
             'ICE': ParticleType("ICE", sad="ICE_baum")}
 
 # Uncomment to use new netcdf LUTs
-tau = Invpar('ITau', ap=-1.0, sx=1.5)
+tau = Invpar('ITau', ap=10.0, sx=1.5)
 for ver in (8, 11, 12, 13):
     SETTINGS[f"WAT{ver:02d}"] = ParticleType(
         'liquid-water', atmospheric_model='01', microphysical_model='old',
@@ -669,7 +669,7 @@ for ver in (8, 11, 12, 13):
     SETTINGS[f"A70{ver:02d}"] = ParticleType(
         'aerosol', atmospheric_model='12', microphysical_model="a70",
         version=f"{ver:02d}", sad='netcdf',
-        inv=(tau, Invpar('IRe', ap=0.821, sx=0.4))
+        inv=(tau, Invpar('IRe', ap=1.22, sx=0.4))
     )
     SETTINGS[f"A75{ver:02d}"] = ParticleType(
         'aerosol', atmospheric_model='12', microphysical_model="a75",
@@ -679,7 +679,7 @@ for ver in (8, 11, 12, 13):
     SETTINGS[f"A76{ver:02d}"] = ParticleType(
         'aerosol', atmospheric_model='12', microphysical_model="a76",
         version=f"{ver:02d}", sad='netcdf',
-        inv=(tau, Invpar('IRe', ap=0.821, sx=0.4))
+        inv=(tau, Invpar('IRe', ap=1.22, sx=0.4))
     )
     SETTINGS[f"A77{ver:02d}"] = ParticleType(
         'aerosol', atmospheric_model='12', microphysical_model="a77",
@@ -693,16 +693,16 @@ for ver in (8, 11, 12, 13):
     )
 
 # These effective radius values are in log space for the old tables
-SETTINGS['A70'] = ParticleType("A70", inv=(tau, Invpar('IRe', ap=0.0856, sx=0.15)))
-SETTINGS['A71'] = ParticleType("A71", inv=(tau, Invpar('IRe', ap=-0.257, sx=0.15)))
-SETTINGS['A72'] = ParticleType("A72", inv=(tau, Invpar('IRe', ap=-0.257, sx=0.15)))
-SETTINGS['A73'] = ParticleType("A73", inv=(tau, Invpar('IRe', ap=-0.257, sx=0.15)))
-SETTINGS['A74'] = ParticleType("A74", inv=(tau, Invpar('IRe', ap=-0.257, sx=0.15)))
-SETTINGS['A75'] = ParticleType("A75", inv=(tau, Invpar('IRe', ap=-0.0419, sx=0.15)))
-SETTINGS['A76'] = ParticleType("A76", inv=(tau, Invpar('IRe', ap=0.0856, sx=0.15)))
-SETTINGS['A77'] = ParticleType("A77", inv=(tau, Invpar('IRe', ap=-0.0419, sx=0.15)))
-SETTINGS['A78'] = ParticleType("A78", inv=(tau, Invpar('IRe', ap=-0.257, sx=0.15)))
-SETTINGS['A79'] = ParticleType("A79", inv=(tau, Invpar('IRe', ap=-0.848, sx=0.15)))
+SETTINGS['A70'] = ParticleType("A70", inv=(tau, Invpar('IRe', ap=1.22, sx=0.15)))
+SETTINGS['A71'] = ParticleType("A71", inv=(tau, Invpar('IRe', ap=0.553, sx=0.15)))
+SETTINGS['A72'] = ParticleType("A72", inv=(tau, Invpar('IRe', ap=0.553, sx=0.15)))
+SETTINGS['A73'] = ParticleType("A73", inv=(tau, Invpar('IRe', ap=0.553, sx=0.15)))
+SETTINGS['A74'] = ParticleType("A74", inv=(tau, Invpar('IRe', ap=0.553, sx=0.15)))
+SETTINGS['A75'] = ParticleType("A75", inv=(tau, Invpar('IRe', ap=0.908, sx=0.15)))
+SETTINGS['A76'] = ParticleType("A76", inv=(tau, Invpar('IRe', ap=1.22, sx=0.15)))
+SETTINGS['A77'] = ParticleType("A77", inv=(tau, Invpar('IRe', ap=0.908, sx=0.15)))
+SETTINGS['A78'] = ParticleType("A78", inv=(tau, Invpar('IRe', ap=0.553, sx=0.15)))
+SETTINGS['A79'] = ParticleType("A79", inv=(tau, Invpar('IRe', ap=0.142, sx=0.15)))
 SETTINGS['EYJ'] = ParticleType("EYJ", inv=(
-    Invpar('ITau', ap=0.18, sx=1.5), Invpar('IRe', ap=0.7, sx=0.15)
+    Invpar('ITau', ap=1.51, sx=1.5), Invpar('IRe', ap=0.7, sx=0.15)
 ))
