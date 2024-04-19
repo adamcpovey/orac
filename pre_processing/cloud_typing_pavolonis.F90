@@ -79,9 +79,12 @@
 !    giving them module scope.
 ! 2017/07/08, GM: Much needed tidying.
 ! 2017/12/20, GT: Changed Sentinel-3 platform name to Sentinel3a or Sentinel3b
-! 2019/8/14, SP: Add Fengyun-4A support.
-! 2021/1/21, DP: Added spectral response correction for MSG1/MSG2/MSG3/MSG4
-!                SEVIRI and Sentinal-3A/Sentinel-3B SLSTR.
+! 2019/08/14, SP: Add Fengyun-4A support.
+! 2021/01/21, DP: Added spectral response correction for MSG1/MSG2/MSG3/MSG4
+!                 SEVIRI and Sentinal-3A/Sentinel-3B SLSTR.
+! 2024/03/13, GT: Added a check for missing values in the 11 micron band before
+!                 attempting cloud masking/typing. This catches pixels which
+!                 exist and are geolocated, but have no data.
 !
 ! Bugs:
 ! None known.
@@ -560,6 +563,27 @@ subroutine cloud_type(channel_info, sensor, surface, imager_flags, &
                ch6 = i
             end select
          end do
+      else if (trim(adjustl(sensor)) .eq. 'FCI') then
+         do i = 1, channel_info%nchannels_total
+            ii = channel_info%map_ids_channel_to_sw(i)
+            select case (channel_info%channel_ids_instr(i))
+            case(3)
+               ch1 = i
+               sw1 = ii
+            case(4)
+               ch2 = i
+               sw2 = ii
+            case(7)
+               ch3 = i
+               sw3 = ii
+            case(9)
+               ch4 = i
+            case(14)
+               ch5 = i
+            case(15)
+               ch6 = i
+            end select
+         end do
       else if (trim(adjustl(sensor)) .eq. 'MODIS') then
          do i = 1, channel_info%nchannels_total
             ii = channel_info%map_ids_channel_to_sw(i)
@@ -734,10 +758,23 @@ subroutine cloud_type(channel_info, sensor, surface, imager_flags, &
       !$OMP DO SCHEDULE(GUIDED)
       i_loop: do  i = imager_geolocation%startx, imager_geolocation%endx
          j_loop: do j = 1, imager_geolocation%ny
-             call cloud_type_pixel(cview, i, j, ch1, ch2, ch3, ch4, ch5, ch6, &
-                  sw1, sw2, sw3, imager_flags, surface, imager_angles, &
-                  imager_geolocation, imager_measurements, imager_pavolonis, &
-                  sensor, platform, doy, do_ironly, verbose, skint, snow_ice_mask)
+             ! Check for pixels with no valid data in the 11 micron band,
+             ! skipping cloud-typing for these data (usually the case at
+             ! the edge of SLSTR swaths, for instance)
+             if (imager_measurements%data(i,j,ch5) .lt. 0.0) then
+                imager_pavolonis%cldtype(i,j,cview) = BYTE_FILL_VALUE
+                imager_pavolonis%cldmask(i,j,cview) = BYTE_FILL_VALUE
+                imager_pavolonis%cldmask_uncertainty(i,j,cview) = SREAL_FILL_VALUE
+                imager_pavolonis%cccot_pre(i,j,cview) = SREAL_FILL_VALUE
+                imager_pavolonis%ann_phase(i,j,cview) = BYTE_FILL_VALUE
+                imager_pavolonis%ann_phase_uncertainty(i,j,cview) = SREAL_FILL_VALUE
+                imager_pavolonis%cphcot(i,j,cview) = SREAL_FILL_VALUE
+             else
+                call cloud_type_pixel(cview, i, j, ch1, ch2, ch3, ch4, ch5, ch6, &
+                     sw1, sw2, sw3, imager_flags, surface, imager_angles, &
+                     imager_geolocation, imager_measurements, imager_pavolonis, &
+                     sensor, platform, doy, do_ironly, verbose, skint, snow_ice_mask)
+             end if
          end do j_loop
       end do i_loop
 
@@ -1956,7 +1993,7 @@ function plank_inv(input_platform, T)
    integer(kind=byte) :: index ! index of row containing platform-specific coefficients
    real(kind=sreal), parameter :: Planck_C1 = 1.19104E-5 ! 2hc^2 in mW m-2 sr-1 (cm-1)-4
    real(kind=sreal), parameter :: Planck_C2 = 1.43877 ! hc/k  in K (cm-1)-1
-   real(kind=sreal), dimension(4,25) :: coefficients ! coefficients containing variables
+   real(kind=sreal), dimension(4,27) :: coefficients ! coefficients containing variables
 
    ! select appropriate row of coefficient values
    select case (input_platform)
@@ -2010,8 +2047,10 @@ function plank_inv(input_platform, T)
       index = 24
    case ("FY-4A", "FY-4B")
       index = 25
-   case ("default")
+   case ("MTG-I1")
       index = 26
+   case ("default")
+      index = 27
    case default
       write(*,*) "Error: Platform name does not match local string in function plank_inv"
       write(*,*) "Input platform name = ", input_platform
@@ -2028,7 +2067,7 @@ function plank_inv(input_platform, T)
    ! a = T2
    ! b = T1
    coefficients = reshape((/ &
-        ! v          a        b        solcon     satname
+      ! v       a         b        solcon     satname
         2655.741, 0.997915, 1.64511, 4.957, & ! noaa05, tirosn
         2671.543, 0.997563, 1.76241, 5.010, & ! noaa06
         2684.523, 0.997083, 1.94314, 5.061, & ! noaa07
@@ -2054,8 +2093,9 @@ function plank_inv(input_platform, T)
         2707.560, 0.999085, 0.58063, 5.123, & ! viirs SoumiNpp/NOAA20
         2673.797, 0.994884, 2.19600, 5.064, & ! slstr Sentinel-3
         2692.112, 0.996369, 2.64763, 5.093, & ! agri fengyun-4
+        2631.579, 0.994040, 1.94224, 4.688, & ! MTG-I1 FCI
         2670.000, 0.998000, 1.75000, 5.000  & ! default
-        /), (/ 4, 25 /))
+        /), (/ 4, 27 /))
 
    plank_inv(1) = Planck_C1 * coefficients(1 , index)**3 / &
         (exp(Planck_C2 * coefficients(1 , index) / &

@@ -151,6 +151,14 @@
 !                 Additionally pass calcrefl(:)=.false. and
 !                 reflectance%refl_in=0. vectors to RTTOV to overcome the RTTOV
 !                 error with some compilers when opts%rt_ir%addsolar=.true..
+! 2023/06/13, GT: Bug fix: Changed dimensions of transmission array to be
+!                 nlevels x nchan to match allocation statement (was
+!                 nlevels x nevals!)
+! 2023/06/26, GT: Also changed nevals to nchan for deallocation of
+!                 radiance arrays to match allocation statement (and
+!                 RTTOV documentation). Removed declaration on nevals
+!                 as it is not used anywhere else (and never had a
+!                 value assigned to it)!
 !
 ! Bugs:
 ! - BRDF not yet implemented here, so RTTOV internal calculation used.
@@ -249,7 +257,7 @@ subroutine rttov_driver(coef_path, emiss_path, granule, preproc_dims, &
 
    ! RTTOV variables
    integer(kind=jpim)                   :: stat
-   integer(kind=jpim)                   :: nprof, nevals, imonth
+   integer(kind=jpim)                   :: nprof, imonth
    integer(kind=jpim)                   :: nlevels, nlayers
    integer(kind=jpim),      allocatable :: input_chan(:)
    logical                              :: write_rttov
@@ -359,6 +367,24 @@ subroutine rttov_driver(coef_path, emiss_path, granule, preproc_dims, &
                     trim(granule%platform)
          stop error_stop_code
       end if
+   case('FCI')
+      if (trim(granule%platform) == 'MTG-I1') then
+         coef_file_vis = 'rtcoef_mtg_1_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_1_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I2') then
+         coef_file_vis = 'rtcoef_mtg_2_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_2_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I3') then
+         coef_file_vis = 'rtcoef_mtg_3_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_3_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I4') then
+         coef_file_vis = 'rtcoef_mtg_4_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_4_fci_o3co2_ironly.dat'
+      else
+         write(*,*) 'ERROR: rttov_driver(): Invalid FCI platform: ', &
+                    trim(granule%platform)
+         stop error_stop_code
+      endif
    case('MODIS')
       if (trim(granule%platform) == 'TERRA') then
          coef_file_vis = 'rtcoef_eos_1_modis-shifted_o3co2.dat'
@@ -929,9 +955,9 @@ subroutine rttov_driver(coef_path, emiss_path, granule, preproc_dims, &
          call rttov_deallocate_emis_atlas(emis_atlas)
          call rttov_alloc_traj(stat, 1, nchan, opts, nlevels, coefs, DEALLOC, &
               traj)
-         call rttov_alloc_transmission(stat, transmission, nlevels, nevals, &
+         call rttov_alloc_transmission(stat, transmission, nlevels, nchan, &
               DEALLOC)
-         call rttov_alloc_rad(stat, nevals, radiance, nlevels, DEALLOC, &
+         call rttov_alloc_rad(stat, nchan, radiance, nlevels, DEALLOC, &
               radiance2)
          call rttov_dealloc_coefs(stat, coefs)
 

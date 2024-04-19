@@ -51,10 +51,16 @@
 ! 2017/04/12, SP: Allow switch to parallel RTTOV only if OPENMP is enabled.
 ! 2017/11/15, SP: Add feature to give access to sensor azimuth angle
 ! 2018/08/30, SP: Allow variable CO2 in RTTOV, linear scaling from 2006 value
-! 2019/8/14, SP: Add Fengyun-4A support.
+! 2019/08/14, SP: Add Fengyun-4A support.
 ! 2019/08/15, SP: Add check for good pixels, meaning we don't run RTTOV on
 !                 those we don't care about. This gives a big speedup to
 !                 processing instruments that cross the dateline.
+! 2023/06/26, GT: Removed the nevals variable and replaced it in the
+!                 deallocation statements for the radiance and
+!                 transmission arrays with nchan. This is consistent
+!                 with the allocation statements for these arrays and
+!                 RTTOV documentation. (nevals was not used anywhere
+!                 else and wasn't even initialised to any value!)
 !
 ! Bugs:
 ! - BRDF not yet implemented here, so RTTOV internal calculation used.
@@ -151,7 +157,7 @@ subroutine rttov_driver_gfs(coef_path, emiss_path, granule, preproc_dims, &
 
    ! RTTOV variables
    integer(kind=jpim)                   :: stat
-   integer(kind=jpim)                   :: nprof, nevals, imonth
+   integer(kind=jpim)                   :: nprof, imonth
    integer(kind=jpim)                   :: nlevels, nlayers
    integer(kind=jpim),      allocatable :: input_chan(:)
    logical                              :: write_rttov
@@ -274,6 +280,24 @@ subroutine rttov_driver_gfs(coef_path, emiss_path, granule, preproc_dims, &
                     trim(granule%platform)
          stop error_stop_code
       end if
+   case('FCI')
+      if (trim(granule%platform) == 'MTG-I1') then
+         coef_file_vis = 'rtcoef_mtg_1_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_1_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I2') then
+         coef_file_vis = 'rtcoef_mtg_2_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_2_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I3') then
+         coef_file_vis = 'rtcoef_mtg_3_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_3_fci_o3co2_ironly.dat'
+      else if (trim(granule%platform) == 'MTG-I4') then
+         coef_file_vis = 'rtcoef_mtg_4_fci_o3co2.dat'
+         coef_file_ir = 'rtcoef_mtg_4_fci_o3co2_ironly.dat'
+      else
+         write(*,*) 'ERROR: rttov_driver(): Invalid FCI platform: ', &
+                    trim(granule%platform)
+         stop error_stop_code
+      endif
    case('SEVIRI')
       if (trim(granule%platform) == 'MSG-1') then
          coef_file_vis = 'rtcoef_msg_1_seviri_o3co2.dat'
@@ -803,9 +827,9 @@ subroutine rttov_driver_gfs(coef_path, emiss_path, granule, preproc_dims, &
          call rttov_deallocate_emis_atlas(emis_atlas)
          call rttov_alloc_traj(stat, 1, nchan, opts, nlevels, coefs, DEALLOC, &
               traj)
-         call rttov_alloc_transmission(stat, transmission, nlevels, nevals, &
+         call rttov_alloc_transmission(stat, transmission, nlevels, nchan, &
               DEALLOC)
-         call rttov_alloc_rad(stat, nevals, radiance, nlevels, DEALLOC, &
+         call rttov_alloc_rad(stat, nchan, radiance, nlevels, DEALLOC, &
               radiance2)
          call rttov_dealloc_coefs(stat, coefs)
 
